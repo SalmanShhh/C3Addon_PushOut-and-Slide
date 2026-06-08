@@ -51,10 +51,6 @@
               "solids": "Solids"
             }
           },
-          "maxPushPerTick": {
-            "name": "Max push per tick",
-            "desc": "The most the object can be moved by a single push, in pixels. 0 means no limit, so it is pushed fully clear at once. Set a small number so a deeply stuck object eases out over a few frames instead of snapping a long way in one go."
-          },
           "skinWidth": {
             "name": "Skin width",
             "desc": "A tiny gap, in pixels, left between the object and the wall after a push. It stops the two from being counted as touching again next frame, which can otherwise cause a 1 pixel jitter. The default of 0.5 is invisible; raise it slightly if you still see jitter."

@@ -108,8 +108,9 @@ export default function (parentClass) {
       // --- Configuration (read each resolution; change live) ------------
       // Property declaration order from config.caw.js:
       // 0 enabled, 1 resolutionMode, 2 resolveOnTick, 3 enableSliding,
-      // 4 slideFriction, 5 stepDistance, 6 obstacles,
-      // 7 maxPushPerTick, 8 skinWidth
+      // 4 slideFriction, 5 stepDistance, 6 obstacles, 7 skinWidth
+      // Max push per tick is not a property; it defaults to 0 (no limit) and is
+      // changed at runtime with the Set max push per tick action.
       const properties = this._getInitProperties();
       if (properties) {
         this._enabled = properties[0] !== false;
@@ -119,8 +120,8 @@ export default function (parentClass) {
         this._slideFriction = this._clamp01(properties[4] || 0);
         this._stepDistance = Math.max(0, properties[5] || 0);
         this._obstacleMode = OBSTACLE_MODES[properties[6]] || "solids";
-        this._maxPushPerTick = Math.max(0, properties[7] || 0);
-        this._skinWidth = Math.max(0, properties[8] != null ? properties[8] : 0.5);
+        this._maxPushPerTick = 0;
+        this._skinWidth = Math.max(0, properties[7] != null ? properties[7] : 0.5);
       } else {
         this._enabled = true;
         this._resolutionMode = "minimum_push";
@@ -320,18 +321,46 @@ export default function (parentClass) {
       };
     }
 
+    // Reach the collision engine from either the behavior or the host instance.
+    _collisions() {
+      if (this.runtime && this.runtime.collisions) return this.runtime.collisions;
+      if (this.instance && this.instance.runtime && this.instance.runtime.collisions)
+        return this.instance.runtime.collisions;
+      return null;
+    }
+
+    // Broadphase candidates for the given types. Falls back to a full
+    // getAllInstances scan if the collision engine is not reachable.
+    _collisionCandidates(types, rect) {
+      if (!types || !types.length) return [];
+      const col = this._collisions();
+      if (col && typeof col.getCollisionCandidates === "function") {
+        try {
+          const c = col.getCollisionCandidates(types, rect);
+          if (c) return c;
+        } catch (e) {
+          /* fall through to a full scan */
+        }
+      }
+      const out = [];
+      for (const t of types) {
+        if (t && typeof t.getAllInstances === "function") {
+          const all = t.getAllInstances();
+          for (let i = 0; i < all.length; i++) out.push(all[i]);
+        }
+      }
+      return out;
+    }
+
     _gatherOverlapping(earlyExit) {
       const inst = this.instance;
       const result = [];
       const seen = new Set();
-      const rect = this._broadRect();
 
-      const consider = (c, requireSolidBehavior) => {
-        if (c === inst || seen.has(c)) return false;
+      const consider = (c) => {
+        if (!c || c === inst || seen.has(c)) return false;
         seen.add(c);
-        if (typeof inst.testOverlap !== "function") return false;
-        if (requireSolidBehavior && !this._instHasEnabledSolid(c)) return false;
-        if (!inst.testOverlap(c)) return false;
+        if (typeof inst.testOverlap !== "function" || !inst.testOverlap(c)) return false;
         const sat = this._computeSAT(inst, c);
         if (!sat || sat.depth <= 0) return false;
         result.push({ inst: c, nx: sat.nx, ny: sat.ny, depth: sat.depth });
@@ -339,36 +368,30 @@ export default function (parentClass) {
       };
 
       if (this._obstacleMode === "solids") {
-        // Solids mode: any object with an enabled built-in Solid behavior,
-        // checked per instance at query time (the explicit registry is unused).
-        let candidates = [];
-        try {
-          candidates =
-            this.runtime.collisions.getCollisionCandidates(this._worldTypes(), rect) ||
-            [];
-        } catch (e) {
-          candidates = [];
+        // Use the documented Solid overlap test: it returns an overlapping
+        // Solid-behavior instance (or null) with no type enumeration. The
+        // bounded resolution loop calls this repeatedly to clear several solids.
+        if (typeof inst.testOverlapSolid === "function") {
+          consider(inst.testOverlapSolid());
+          return result;
         }
+        // Fallback for runtimes without testOverlapSolid: scan world types and
+        // keep only instances carrying an enabled Solid behavior.
+        const candidates = this._collisionCandidates(this._worldTypes(), this._broadRect());
         for (let i = 0; i < candidates.length; i++) {
-          if (consider(candidates[i], true) && earlyExit) return result;
+          if (!this._instHasEnabledSolid(candidates[i])) continue;
+          if (consider(candidates[i]) && earlyExit) return result;
         }
-      } else {
-        // Custom mode: only the object types added via Add solid.
-        const explicitTypes = [...this._solidTypes];
-        if (explicitTypes.length) {
-          let candidates = [];
-          try {
-            candidates =
-              this.runtime.collisions.getCollisionCandidates(explicitTypes, rect) || [];
-          } catch (e) {
-            candidates = [];
-          }
-          for (let i = 0; i < candidates.length; i++) {
-            if (consider(candidates[i], false) && earlyExit) return result;
-          }
-        }
+        return result;
       }
 
+      // Custom mode: only the object types added via Add solid.
+      const explicitTypes = [...this._solidTypes];
+      if (!explicitTypes.length) return result;
+      const candidates = this._collisionCandidates(explicitTypes, this._broadRect());
+      for (let i = 0; i < candidates.length; i++) {
+        if (consider(candidates[i]) && earlyExit) return result;
+      }
       return result;
     }
 
@@ -816,47 +839,18 @@ export default function (parentClass) {
     // ----- Debugger -----------------------------------------------------
 
     _getDebuggerProperties() {
-      const solidNames = [...this._solidTypes].map((t) =>
-        t && t.name ? t.name : "?"
-      );
       return [
         {
-          title: "$Push-Out and Slide - State",
+          title: "$" + this.behaviorType.name,
           properties: [
-            { name: "$enabled", value: this._enabled, onedit: (v) => this._setEnabled(!!v) },
+            { name: "$enabled", value: this._enabled },
+            { name: "$obstacles", value: this._obstacleMode },
             { name: "$resolutionMode", value: this._resolutionMode },
-            {
-              name: "$slidingEnabled",
-              value: this._slidingEnabled,
-              onedit: (v) => this._setSlidingEnabled(!!v),
-            },
-            {
-              name: "$slideFriction",
-              value: this._slideFriction,
-              onedit: (v) => this._setSlideFriction(+v),
-            },
-            {
-              name: "$stepDistance",
-              value: this._stepDistance,
-              onedit: (v) => this._setStepDistance(+v),
-            },
             { name: "$isSliding", value: this._isSliding },
             { name: "$isTrapped", value: this._isTrapped },
             { name: "$overlapCount", value: this._overlapCount },
-            { name: "$lastPushX", value: this._lastPushX },
-            { name: "$lastPushY", value: this._lastPushY },
             { name: "$lastPushDistance", value: this._lastPushDistance },
-            { name: "$surfaceNormalX", value: this._surfaceNormalX },
-            { name: "$surfaceNormalY", value: this._surfaceNormalY },
-            { name: "$stepCount", value: this._stepCount },
-          ],
-        },
-        {
-          title: "$Push-Out and Slide - Solids",
-          properties: [
-            { name: "$obstacleMode", value: this._obstacleMode },
             { name: "$solidCount", value: this._solidTypes.size },
-            { name: "$registeredSolids", value: solidNames.join(", ") },
           ],
         },
       ];

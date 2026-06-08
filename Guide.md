@@ -104,10 +104,11 @@ These appear in the Properties Bar when Push-Out and Slide is selected on its ob
 | **Slide friction** | Percent | `0%` | Fraction of along surface speed lost per resolution while sliding. 0% is a frictionless glide; 100% is a full stop. |
 | **Step distance** | Float | `0` | Maximum distance moved per step, in pixels. Movement is broken into steps no larger than this, triggering *On step* at each. 0 disables stepping. |
 | **Obstacles** | Dropdown | `Solids` | Which objects count as walls. `Solids` (the default) uses every object with Construct's built in Solid behavior, with no setup. `Custom` instead uses the types you register with *Add solid* (each object has its own list). The two modes are exclusive, like the Line of Sight behavior's Obstacles property. |
-| **Max push per tick** | Float | `0` | Maximum length of a single correction, in pixels. 0 means no limit. A small value stops a deep penetration snapping the object a long way in one tick. |
 | **Skin width** | Float | `0.5` | Gap kept between the object and a solid after a push, in pixels, to prevent floating point re-overlap on the next tick. |
 
-> Resolution mode, Slide friction, Step distance, Max push per tick and Skin width are read fresh on every resolution, so changing them with an action takes effect immediately.
+> **Max push per tick** is not in the property panel; it defaults to 0 (no limit) and is set from events with the *Set max push per tick* action. See [section 5](#5-resolution-when-and-how-the-push-out-runs).
+
+> Resolution mode, Slide friction, Step distance and Skin width are read fresh on every resolution, so changing them with an action takes effect immediately.
 
 ---
 
@@ -199,7 +200,7 @@ Event: Player | entered a vertical shaft
 
 At a concave corner, a naive shortest axis push flips between X and Y on consecutive ticks and the object visibly buzzes. Push-Out and Slide resolves against the deepest penetrating solid first, blends the slide direction with the previous tick's contact normal, and iterates a bounded number of times per tick so multi wall contacts settle cleanly.
 
-**Max push per tick** caps the length of any single correction. Leave it at 0 for instant resolution. Set a small value when an object can end up deeply embedded and you want it eased out over a few ticks instead of snapping:
+**Max push per tick** caps the length of any single correction. It is not a property; it lives only as the *Set max push per tick* action and defaults to 0 (no limit). Leave it at 0 for instant resolution. Set a small value when an object can end up deeply embedded and you want it eased out over a few ticks instead of snapping:
 
 ```
 Event: On start of layout
@@ -985,33 +986,20 @@ Event: On start of layout
 
 ## 16. C3 Debugger
 
-Push-Out and Slide surfaces its live state in Construct's debugger. Open it with the bug icon during preview (or press F12 in the preview window) and expand the object's behavior.
-
-### $Push-Out and Slide - State
+Push-Out and Slide surfaces a compact summary of its live state in Construct's debugger. Open it with the bug icon during preview (or press F12 in the preview window) and expand the object's behavior to find the **$Push-Out and Slide** section.
 
 | Field | Meaning |
 |---|---|
-| enabled | Whether the behavior is currently resolving. Editable. |
+| enabled | Whether the behavior is currently resolving. |
+| obstacles | The active obstacle source (`custom` or `solids`). |
 | resolutionMode | The active mode key (`minimum_push`, `axis_x`, `axis_y`, `nearest_open`). |
-| slidingEnabled | Whether sliding is on. Editable. |
-| slideFriction | The 0 to 1 friction fraction. Editable. |
-| stepDistance | The current step distance in pixels. Editable. |
 | isSliding | Whether the last resolution slid along a surface. |
 | isTrapped | Whether the object is wedged against opposing solids. |
 | overlapCount | Number of solids touched at the last resolution. |
-| lastPushX / lastPushY / lastPushDistance | The last correction vector and its length. |
-| surfaceNormalX / surfaceNormalY | The last surface normal. |
-| stepCount | How many steps the last tick was split into. |
-
-### $Push-Out and Slide - Solids
-
-| Field | Meaning |
-|---|---|
-| obstacleMode | The active obstacle source (`custom` or `solids`). |
+| lastPushDistance | Length of the last correction, in pixels (0 if nothing moved). |
 | solidCount | Number of registered solid types (used in Custom mode). |
-| registeredSolids | Comma separated names of the registered types. |
 
-The editable fields (enabled, slidingEnabled, slideFriction, stepDistance) can be changed live in the debugger to tune behavior without restarting the layout.
+For the full per-axis push, surface normal, slide and step values, read the matching expressions (section 12) in the event sheet.
 
 ---
 

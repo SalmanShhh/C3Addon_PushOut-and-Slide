@@ -1,9 +1,9 @@
 <img src="./src/icon.svg" width="100" /><br>
 # Push-Out and Slide
 <i>Push an object out of registered solids after you move it: minimum push-out, wall sliding, sub-stepping for fast movement, and a nearest-open-space eject. You drive the movement, this corrects it.</i> <br>
-### Version 1.0.0.0
+### Version 1.0.1.0
 
-[<img src="https://placehold.co/200x50/4493f8/FFF?text=Download&font=montserrat" width="200"/>](https://github.com/SalmanShhh/C3Addon_PushOut-and-Slide/releases/download/salmanshh_pushoutsolid-1.0.0.0.c3addon/salmanshh_pushoutsolid-1.0.0.0.c3addon)
+[<img src="https://placehold.co/200x50/4493f8/FFF?text=Download&font=montserrat" width="200"/>](https://github.com/SalmanShhh/C3Addon_PushOut-and-Slide/releases/download/salmanshh_pushoutsolid-1.0.1.0.c3addon/salmanshh_pushoutsolid-1.0.1.0.c3addon)
 <br>
 <sub> [See all releases](https://github.com/SalmanShhh/C3Addon_PushOut-and-Slide/releases) </sub> <br>
 
@@ -35,6 +35,9 @@ npm run dev
 ```
 
 ## Examples Files
+| Description | Download |
+| --- | --- |
+| PushOut example | [<img src="https://placehold.co/120x30/4493f8/FFF?text=Download&font=montserrat" width="120"/>](https://github.com/SalmanShhh/C3Addon_PushOut-and-Slide/raw/refs/heads/main/examples/PushOut%20example.c3p) |
 
 ---
 ## Properties
@@ -47,7 +50,6 @@ npm run dev
 | Slide friction | How much the object slows down while sliding along a wall. 0% glides freely (like ice), 100% stops it the moment it touches a wall. Values in between feel grippy or draggy. | percent |
 | Step distance | For fast moving objects. Each frame the object's movement is split into small steps of at most this many pixels, so a fast object cannot jump straight through a thin wall. Set it smaller than your thinnest wall. Leave at 0 to turn stepping off. | float |
 | Obstacles | Which objects count as walls. 'Custom' uses the object types you register with the Add solid action, so each object can have its own list. 'Solids' instead uses every object that has Construct's built-in Solid behavior, with no setup needed. | combo |
-| Max push per tick | The most the object can be moved by a single push, in pixels. 0 means no limit, so it is pushed fully clear at once. Set a small number so a deeply stuck object eases out over a few frames instead of snapping a long way in one go. | float |
 | Skin width | A tiny gap, in pixels, left between the object and the wall after a push. It stops the two from being counted as touching again next frame, which can otherwise cause a 1 pixel jitter. The default of 0.5 is invisible; raise it slightly if you still see jitter. | float |
 
 
@@ -108,6 +110,8 @@ npm run dev
 
 ---
 ## Changelog
+
+**1.0.1.0**
 
 **1.0.0.0**
 

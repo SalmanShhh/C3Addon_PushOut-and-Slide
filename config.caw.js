@@ -78,7 +78,8 @@ export const info = {
 
 // Property declaration order is the index returned by _getInitProperties():
 // 0 enabled, 1 resolutionMode, 2 resolveOnTick, 3 enableSliding, 4 slideFriction,
-// 5 stepDistance, 6 obstacles, 7 maxPushPerTick, 8 skinWidth
+// 5 stepDistance, 6 obstacles, 7 skinWidth
+// (Max push per tick is intentionally not a property; set it with the Set max push per tick action.)
 export const properties = [
   {
     type: PROPERTY_TYPE.CHECK,
@@ -149,16 +150,6 @@ export const properties = [
     options: {
       initialValue: "solids",
       items: [{ custom: "Custom" }, { solids: "Solids" }],
-    },
-  },
-  {
-    type: PROPERTY_TYPE.FLOAT,
-    id: "maxPushPerTick",
-    name: "Max push per tick",
-    desc: "The most the object can be moved by a single push, in pixels. 0 means no limit, so it is pushed fully clear at once. Set a small number so a deeply stuck object eases out over a few frames instead of snapping a long way in one go.",
-    options: {
-      initialValue: 0,
-      minValue: 0,
     },
   },
   {
