@@ -1,117 +1,351 @@
 {
   "languageTag": "en-US",
-  "fileDescription": "Strings for sample_addon.",
+  "fileDescription": "Strings for salmanshh_pushoutsolid.",
   "text": {
-    "plugins": {
-      "sample_addon": {
-        "name": "Sample Addon",
-        "description": "Description",
+    "behaviors": {
+      "salmanshh_pushoutsolid": {
+        "name": "Push-Out and Slide",
+        "description": "Push an object out of registered solids after you move it: minimum push-out, wall sliding, sub-stepping for fast movement, and a nearest-open-space eject. You drive the movement, this corrects it.",
         "help-url": "https://www.construct.net",
         "aceCategories": {
-          "Ace_Folders_In_Category_Folder": "Ace_Folders_In_Category_Folder",
-          "Aces_Files_In_Category_Folder": "Aces_Files_In_Category_Folder",
-          "Aces_In_Single_File": "Aces_In_Single_File"
+          "Configuration": "Configuration",
+          "Resolution": "Resolution",
+          "Solids": "Solids"
         },
-        "properties": {},
+        "properties": {
+          "enabled": {
+            "name": "Enabled",
+            "desc": "Turn the whole behavior on or off. When off, the object is never pushed out of walls. You can change this while the game runs with the Set enabled action."
+          },
+          "resolutionMode": {
+            "name": "Resolution mode",
+            "desc": "How the object is pushed out of a wall. 'Minimum push' moves it the shortest way out (best for most games). 'Axis X only' and 'Axis Y only' push it out sideways or up and down only. 'Nearest open space' searches around for the closest free spot (slower; best used through the Eject action).",
+            "items": {
+              "minimum_push": "Minimum push",
+              "axis_x": "Axis X only",
+              "axis_y": "Axis Y only",
+              "nearest_open": "Nearest open space"
+            }
+          },
+          "resolveOnTick": {
+            "name": "Resolve on tick",
+            "desc": "When ticked, the object is automatically pushed out of walls every frame, right after your events move it. Untick it if you instead want to push out only at specific moments using the Resolve now action."
+          },
+          "enableSliding": {
+            "name": "Enable sliding",
+            "desc": "When ticked, an object pushed against a wall keeps sliding along it instead of stopping dead. For example, walking diagonally into a wall makes the object glide along the wall rather than getting stuck."
+          },
+          "slideFriction": {
+            "name": "Slide friction",
+            "desc": "How much the object slows down while sliding along a wall. 0% glides freely (like ice), 100% stops it the moment it touches a wall. Values in between feel grippy or draggy."
+          },
+          "stepDistance": {
+            "name": "Step distance",
+            "desc": "For fast moving objects. Each frame the object's movement is split into small steps of at most this many pixels, so a fast object cannot jump straight through a thin wall. Set it smaller than your thinnest wall. Leave at 0 to turn stepping off."
+          },
+          "obstacles": {
+            "name": "Obstacles",
+            "desc": "Which objects count as walls. 'Custom' uses the object types you register with the Add solid action, so each object can have its own list. 'Solids' instead uses every object that has Construct's built-in Solid behavior, with no setup needed.",
+            "items": {
+              "custom": "Custom",
+              "solids": "Solids"
+            }
+          },
+          "maxPushPerTick": {
+            "name": "Max push per tick",
+            "desc": "The most the object can be moved by a single push, in pixels. 0 means no limit, so it is pushed fully clear at once. Set a small number so a deeply stuck object eases out over a few frames instead of snapping a long way in one go."
+          },
+          "skinWidth": {
+            "name": "Skin width",
+            "desc": "A tiny gap, in pixels, left between the object and the wall after a push. It stops the two from being counted as touching again next frame, which can otherwise cause a 1 pixel jitter. The default of 0.5 is invisible; raise it slightly if you still see jitter."
+          }
+        },
         "actions": {
-          "ActionCombo": {
-            "list-name": "Sample Action Combo",
-            "display-text": "Sample Action Combo {0}",
-            "description": "This is a sample action",
+          "SetMaxPushPerTick": {
+            "list-name": "Set max push per tick",
+            "display-text": "Set max push per tick to {0} px",
+            "description": "Set the maximum length of a single correction, in pixels. Set to 0 for no limit.",
             "params": {
-              "param1": {
-                "name": "Param1",
-                "desc": "This is a sample param",
+              "pixels": {
+                "name": "Pixels",
+                "desc": "The maximum length of a single correction, in pixels. 0 means no limit."
+              }
+            }
+          },
+          "SetObstacles": {
+            "list-name": "Set obstacles",
+            "display-text": "Set obstacles to {0}",
+            "description": "Choose which objects count as walls: Custom uses the types added with Add solid, Solids uses every object with the built-in Solid behavior.",
+            "params": {
+              "mode": {
+                "name": "Obstacles",
+                "desc": "The obstacle source to use.",
                 "items": {
-                  "test": "test",
-                  "test2": "test2"
+                  "custom": "Custom",
+                  "solids": "Solids"
                 }
               }
             }
           },
-          "Action": {
-            "list-name": "Sample Action",
-            "display-text": "Sample Action {0}",
-            "description": "This is a sample action",
+          "SetResolutionMode": {
+            "list-name": "Set resolution mode",
+            "display-text": "Set resolution mode to {0}",
+            "description": "Set how the push-out correction is computed.",
             "params": {
-              "param1": {
-                "name": "Param1",
-                "desc": "This is a sample param"
+              "mode": {
+                "name": "Mode",
+                "desc": "The resolution mode to use.",
+                "items": {
+                  "minimum_push": "Minimum push",
+                  "axis_x": "Axis X only",
+                  "axis_y": "Axis Y only",
+                  "nearest_open": "Nearest open space"
+                }
               }
             }
           },
-          "AsyncAction": {
-            "list-name": "Sample Action Async",
-            "display-text": "Sample Action Async",
-            "description": "This is a sample action",
+          "SetSkinWidth": {
+            "list-name": "Set skin width",
+            "display-text": "Set skin width to {0} px",
+            "description": "Set the gap kept between this object and solids after a push, in pixels.",
+            "params": {
+              "pixels": {
+                "name": "Pixels",
+                "desc": "The gap kept between this object and solids after a push, in pixels."
+              }
+            }
+          },
+          "SetSlideFriction": {
+            "list-name": "Set slide friction",
+            "display-text": "Set slide friction to {0}%",
+            "description": "Set the fraction of along-surface speed lost per resolution, from 0 (frictionless) to 1 (full stop). Values are clamped to that range.",
+            "params": {
+              "friction": {
+                "name": "Friction",
+                "desc": "The friction fraction, from 0 (frictionless) to 1 (full stop)."
+              }
+            }
+          },
+          "SetSlidingEnabled": {
+            "list-name": "Set sliding enabled",
+            "display-text": "Set sliding enabled to {0}",
+            "description": "Set whether the object slides along solid surfaces instead of stopping at them.",
+            "params": {
+              "enabled": {
+                "name": "Enabled",
+                "desc": "Whether sliding is enabled."
+              }
+            }
+          },
+          "SetStepDistance": {
+            "list-name": "Set step distance",
+            "display-text": "Set step distance to {0} px",
+            "description": "Set the maximum distance moved per step, in pixels. Movement is broken into steps no larger than this. Set to 0 to disable stepping.",
+            "params": {
+              "distance": {
+                "name": "Distance",
+                "desc": "The maximum distance per step, in pixels. 0 disables stepping."
+              }
+            }
+          },
+          "EjectToNearestOpenSpace": {
+            "list-name": "Eject to nearest open space",
+            "display-text": "Eject to nearest open space within {0} px",
+            "description": "Search outward for the closest position where this object overlaps no solid, up to the given radius in pixels, and move it there. Triggers On ejected on success or On eject failed otherwise.",
+            "params": {
+              "maxRadius": {
+                "name": "Max radius",
+                "desc": "The maximum distance to search outward, in pixels."
+              }
+            }
+          },
+          "ResolveNow": {
+            "list-name": "Resolve now",
+            "display-text": "Resolve now",
+            "description": "Run one resolution immediately, regardless of Resolve on tick. Triggers On pushed out if a correction is applied, or On became trapped if the object cannot be freed.",
             "params": {}
           },
-          "SampleAction": {
-            "list-name": "Sample Action",
-            "display-text": "Sample Action {0}",
-            "description": "This is a sample action",
+          "SetEnabled": {
+            "list-name": "Set enabled",
+            "display-text": "Set enabled to {0}",
+            "description": "Set whether the behavior resolves.",
             "params": {
-              "param1": {
-                "name": "Param1",
-                "desc": "This is a sample param"
+              "enabled": {
+                "name": "Enabled",
+                "desc": "Whether the behavior resolves."
+              }
+            }
+          },
+          "AddSolid": {
+            "list-name": "Add solid",
+            "display-text": "Add {0} as a solid",
+            "description": "Add an object type as a solid for this object. Instances of that type will push this object out. Adding the same type twice has no effect.",
+            "params": {
+              "object": {
+                "name": "Object",
+                "desc": "The object type to treat as a solid."
+              }
+            }
+          },
+          "ClearSolids": {
+            "list-name": "Clear solids",
+            "display-text": "Clear all solids",
+            "description": "Remove all object types from this object's solid registry.",
+            "params": {}
+          },
+          "RemoveSolid": {
+            "list-name": "Remove solid",
+            "display-text": "Remove {0} from solids",
+            "description": "Stop treating an object type as a solid for this object.",
+            "params": {
+              "object": {
+                "name": "Object",
+                "desc": "The object type to stop treating as a solid."
               }
             }
           }
         },
         "conditions": {
-          "ConditionCombo": {
-            "list-name": "Sample Condition",
-            "display-text": "Sample Condition {0}",
-            "description": "This is a sample condition",
-            "params": {
-              "param1": {
-                "name": "Param1",
-                "desc": "This is a sample param",
-                "items": {
-                  "TRUE": "True",
-                  "FALSE": "False"
-                }
-              }
-            }
-          },
-          "Condition": {
-            "list-name": "Sample Condition",
-            "display-text": "Sample Condition {0}",
-            "description": "This is a sample condition",
-            "params": {
-              "param1": {
-                "name": "Param1",
-                "desc": "This is a sample param"
-              }
-            }
-          },
-          "Trigger": {
-            "list-name": "Sample Trigger",
-            "display-text": "Sample Trigger",
-            "description": "This is a sample trigger",
+          "IsEnabled": {
+            "list-name": "Is enabled",
+            "display-text": "Is enabled",
+            "description": "True if the behavior is enabled.",
             "params": {}
           },
-          "SampleCondition": {
-            "list-name": "Sample Condition",
-            "display-text": "Sample Condition",
-            "description": "This is a sample condition",
+          "IsOverlappingSolid": {
+            "list-name": "Is overlapping solid",
+            "display-text": "Is overlapping a solid",
+            "description": "True if this object currently overlaps at least one registered solid.",
             "params": {}
+          },
+          "IsSliding": {
+            "list-name": "Is sliding",
+            "display-text": "Is sliding",
+            "description": "True if the last resolution preserved along-surface movement.",
+            "params": {}
+          },
+          "IsTrapped": {
+            "list-name": "Is trapped",
+            "display-text": "Is trapped",
+            "description": "True if the last resolution left this object wedged against opposing solids.",
+            "params": {}
+          },
+          "OnBecameTrapped": {
+            "list-name": "On became trapped",
+            "display-text": "On became trapped",
+            "description": "Triggered when a resolution cannot free the object because it overlaps solids on opposing sides. OverlapCount reports how many solids it is wedged against.",
+            "params": {}
+          },
+          "OnEjected": {
+            "list-name": "On ejected",
+            "display-text": "On ejected",
+            "description": "Triggered after Eject to nearest open space succeeds. LastPushX and LastPushY give the offset from the original to the ejected position.",
+            "params": {}
+          },
+          "OnEjectFailed": {
+            "list-name": "On eject failed",
+            "display-text": "On eject failed",
+            "description": "Triggered when Eject to nearest open space finds no open position within the radius. The object is left at its original position.",
+            "params": {}
+          },
+          "OnPushedOut": {
+            "list-name": "On pushed out",
+            "display-text": "On pushed out",
+            "description": "Triggered after a resolution applies a non-zero correction. The LastPush, SurfaceNormal, Slide and OverlapCount expressions describe the correction just applied.",
+            "params": {}
+          },
+          "OnStep": {
+            "list-name": "On step",
+            "display-text": "On step",
+            "description": "Triggered for each step this object moves in, when stepping is enabled. Use it to make additional collision tests during fast movement. StepIndex and StepCount are available, and the object is at the current step's resolved position.",
+            "params": {}
+          },
+          "IsSolid": {
+            "list-name": "Is solid",
+            "display-text": "{0} is registered as a solid",
+            "description": "True if the given object type is registered as a solid for this object.",
+            "params": {
+              "object": {
+                "name": "Object",
+                "desc": "The object type to check."
+              }
+            }
           }
         },
         "expressions": {
-          "Expression2": {
-            "translated-name": "Expression2",
-            "description": "Sample Expression",
+          "ResolutionMode": {
+            "translated-name": "ResolutionMode",
+            "description": "The current resolution mode key (minimum_push, axis_x, axis_y or nearest_open).",
             "params": {}
           },
-          "Expression": {
-            "translated-name": "Expression",
-            "description": "Sample Expression",
+          "LastPushDistance": {
+            "translated-name": "LastPushDistance",
+            "description": "The length of the last correction, in pixels. 0 if the last resolution moved nothing.",
             "params": {}
           },
-          "SampleExpression": {
-            "translated-name": "SampleExpression",
-            "description": "This is a sample expression",
+          "LastPushX": {
+            "translated-name": "LastPushX",
+            "description": "The X distance of the last correction, in pixels.",
+            "params": {}
+          },
+          "LastPushY": {
+            "translated-name": "LastPushY",
+            "description": "The Y distance of the last correction, in pixels.",
+            "params": {}
+          },
+          "OverlapCount": {
+            "translated-name": "OverlapCount",
+            "description": "The number of distinct solids the object overlapped at the last resolution.",
+            "params": {}
+          },
+          "SlideDistance": {
+            "translated-name": "SlideDistance",
+            "description": "The length of the along-surface movement preserved at the last resolution, in pixels.",
+            "params": {}
+          },
+          "SlideX": {
+            "translated-name": "SlideX",
+            "description": "The X distance of the along-surface movement preserved at the last resolution, in pixels. 0 if no sliding occurred.",
+            "params": {}
+          },
+          "SlideY": {
+            "translated-name": "SlideY",
+            "description": "The Y distance of the along-surface movement preserved, in pixels.",
+            "params": {}
+          },
+          "StepCount": {
+            "translated-name": "StepCount",
+            "description": "The number of steps the object moves in during the current tick. 1 when stepping is disabled.",
+            "params": {}
+          },
+          "StepIndex": {
+            "translated-name": "StepIndex",
+            "description": "The index of the current step, starting at 0. Meaningful inside On step.",
+            "params": {}
+          },
+          "SurfaceNormalX": {
+            "translated-name": "SurfaceNormalX",
+            "description": "The X component of the unit surface normal the object was pushed off (the push-out direction). 0 if nothing moved.",
+            "params": {}
+          },
+          "SurfaceNormalY": {
+            "translated-name": "SurfaceNormalY",
+            "description": "The Y component of the unit surface normal. Use with SurfaceNormalX to detect which side a wall is on.",
+            "params": {}
+          },
+          "GetSolidByIndex": {
+            "translated-name": "GetSolidByIndex",
+            "description": "The name of the registered solid object type at the given 0-based index.",
+            "params": {
+              "index": {
+                "name": "Index",
+                "desc": "The 0-based position in the solid registry."
+              }
+            }
+          },
+          "SolidCount": {
+            "translated-name": "SolidCount",
+            "description": "The number of object types currently registered as solids.",
             "params": {}
           }
         }
