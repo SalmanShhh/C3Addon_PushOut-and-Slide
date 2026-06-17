@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set resolution mode",
-  displayText: "Set resolution mode to {0}",
+  displayText: "{my} Set resolution mode to {0}",
   description: "Set how the push-out correction is computed.",
   params: [
     {
@@ -17,6 +17,7 @@ export const config = {
         { axis_x: "Axis X only" },
         { axis_y: "Axis Y only" },
         { nearest_open: "Nearest open space" },
+        { swept: "Swept (continuous)" },
       ],
     },
   ],

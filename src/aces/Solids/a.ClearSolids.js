@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Clear solids",
-  displayText: "Clear all solids",
+  displayText: "{my} Clear all solids",
   description:
     "Remove all object types from this object's solid registry.",
   params: [],

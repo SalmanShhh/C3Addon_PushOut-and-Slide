@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Remove solid",
-  displayText: "Remove {0} from solids",
+  displayText: "{my} Remove {0} from solids",
   description:
     "Stop treating an object type as a solid for this object.",
   params: [

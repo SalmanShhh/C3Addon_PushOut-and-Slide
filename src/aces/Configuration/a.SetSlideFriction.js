@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set slide friction",
-  displayText: "Set slide friction to {0}%",
+  displayText: "{my} Set slide friction to {0}%",
   description:
     "Set the fraction of along-surface speed lost per resolution, from 0 (frictionless) to 1 (full stop). Values are clamped to that range.",
   params: [

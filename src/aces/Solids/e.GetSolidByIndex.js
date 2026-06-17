@@ -1,4 +1,4 @@
-export const config = {
+﻿export const config = {
   highlight: false,
   isDeprecated: false,
   returnType: "string",
@@ -14,7 +14,7 @@ export const config = {
   ],
 };
 
-export const expose = false;
+export const expose = true;
 
 export default function (index) {
   return this._getSolidNameByIndex(index);

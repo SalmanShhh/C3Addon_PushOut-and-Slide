@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set max push per tick",
-  displayText: "Set max push per tick to {0} px",
+  displayText: "{my} Set max push per tick to {0} px",
   description:
     "Set the maximum length of a single correction, in pixels. Set to 0 for no limit.",
   params: [

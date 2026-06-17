@@ -2,7 +2,7 @@ export const config = {
   highlight: false,
   isDeprecated: false,
   listName: "Is solid",
-  displayText: "{0} is registered as a solid",
+  displayText: "{my} {0} is registered as a solid",
   description:
     "True if the given object type is registered as a solid for this object.",
   params: [

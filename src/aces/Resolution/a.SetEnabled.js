@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set enabled",
-  displayText: "Set enabled to {0}",
+  displayText: "{my} Set enabled to {0}",
   description: "Set whether the behavior resolves.",
   params: [
     {

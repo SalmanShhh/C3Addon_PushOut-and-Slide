@@ -4,7 +4,7 @@ export const config = {
   isTrigger: true,
   isInvertible: false,
   listName: "On ejected",
-  displayText: "On ejected",
+  displayText: "{my} On ejected",
   description:
     "Triggered after Eject to nearest open space succeeds. LastPushX and LastPushY give the offset from the original to the ejected position.",
   params: [],

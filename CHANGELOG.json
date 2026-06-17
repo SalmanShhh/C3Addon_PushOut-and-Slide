@@ -13,5 +13,10 @@
     "added": "",
     "changed": "",
     "fixed": ""
+  },
+  "1.1.0.0": {
+    "added": "- Swept (continuous) resolution mode,  traces the move and stops at the first wall; built for Drag & Drop and any large per-tick jump.\n- Movement style property (Top-down / Side-scrolling), classifies each contact as floor, wall or ceiling in side-scrolling games.\n- Up direction property (Up/Down/Left/Right) for normal, flipped, or sideways gravity.\n- Max floor slope property, the angle threshold separating floor/ceiling from wall (also limits jump-thru landing tilt).\n- Axis resolution property (Minimum / Separate (gravity axis first)), platformer-stable land-then-touch-wall ordering.\n- Jump-thru one-way platforms via Construct's built-in Jump-thru behavior (None / Jump-thru behavior / Custom source), with Add/Remove/Clear jump-thru, Is jump-thru, JumpthruCount, GetJumpthruByIndex\n- Surfaces category: conditions Is on floor/wall/ceiling/slope; triggers On landed, On left floor, On hit wall, On hit ceiling; expressions FloorNormalX/Y, SlopeAngle, WallSide, TicksSinceFloor (coyote time).\nNew Configuration actions: Set movement style, Set up direction, Set max floor slope, Set axis resolution, Set jump-thru source; plus MovementStyle expression.\n- New debugger fields",
+    "changed": "- Every expression is now exposed to scripting, is fully supported via the ACEs.\n- {my} icon token added to all action/condition/trigger display texts (new and existing)\n",
+    "fixed": ""
   }
 }

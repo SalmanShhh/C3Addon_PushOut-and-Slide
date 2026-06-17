@@ -4,7 +4,7 @@ export const config = {
   isTrigger: true,
   isInvertible: false,
   listName: "On eject failed",
-  displayText: "On eject failed",
+  displayText: "{my} On eject failed",
   description:
     "Triggered when Eject to nearest open space finds no open position within the radius. The object is left at its original position.",
   params: [],

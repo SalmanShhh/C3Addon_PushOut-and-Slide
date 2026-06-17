@@ -1,4 +1,4 @@
-export const config = {
+﻿export const config = {
   highlight: false,
   isDeprecated: false,
   returnType: "number",
@@ -7,7 +7,7 @@ export const config = {
   params: [],
 };
 
-export const expose = false;
+export const expose = true;
 
 export default function () {
   return this._surfaceNormalX;

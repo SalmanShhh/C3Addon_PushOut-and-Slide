@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set obstacles",
-  displayText: "Set obstacles to {0}",
+  displayText: "{my} Set obstacles to {0}",
   description:
     "Choose which objects count as walls: Custom uses the types added with Add solid, Solids uses every object with the built-in Solid behavior.",
   params: [

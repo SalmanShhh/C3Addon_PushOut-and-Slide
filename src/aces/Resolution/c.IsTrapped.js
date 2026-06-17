@@ -2,7 +2,7 @@ export const config = {
   highlight: false,
   isDeprecated: false,
   listName: "Is trapped",
-  displayText: "Is trapped",
+  displayText: "{my} Is trapped",
   description:
     "True if the last resolution left this object wedged against opposing solids.",
   params: [],

@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set skin width",
-  displayText: "Set skin width to {0} px",
+  displayText: "{my} Set skin width to {0} px",
   description:
     "Set the gap kept between this object and solids after a push, in pixels.",
   params: [

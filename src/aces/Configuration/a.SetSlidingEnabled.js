@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set sliding enabled",
-  displayText: "Set sliding enabled to {0}",
+  displayText: "{my} Set sliding enabled to {0}",
   description:
     "Set whether the object slides along solid surfaces instead of stopping at them.",
   params: [

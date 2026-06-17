@@ -36,7 +36,9 @@ export const files = {
 // categories that are not filled will use the folder name
 export const aceCategories = {
   Solids: "Solids",
+  Jumpthru: "Jump-thru",
   Resolution: "Resolution",
+  Surfaces: "Surfaces",
   Configuration: "Configuration",
 };
 
@@ -77,24 +79,18 @@ export const info = {
 };
 
 // Property declaration order is the index returned by _getInitProperties():
-// 0 enabled, 1 resolutionMode, 2 resolveOnTick, 3 enableSliding, 4 slideFriction,
-// 5 stepDistance, 6 obstacles, 7 skinWidth
+// 0 resolutionMode, 1 resolveOnTick, 2 enableSliding, 3 slideFriction,
+// 4 stepDistance, 5 obstacles, 6 skinWidth, 7 movementStyle, 8 upDirection,
+// 9 floorSlopeMax, 10 axisResolution, 11 jumpthruSource, 12 enabled
+// "Enabled" is intentionally kept last in the panel; the constructor reads by
+// these indices, so keep this list and the constructor in sync.
 // (Max push per tick is intentionally not a property; set it with the Set max push per tick action.)
 export const properties = [
-  {
-    type: PROPERTY_TYPE.CHECK,
-    id: "enabled",
-    name: "Enabled",
-    desc: "Turn the whole behavior on or off. When off, the object is never pushed out of walls. You can change this while the game runs with the Set enabled action.",
-    options: {
-      initialValue: true,
-    },
-  },
   {
     type: PROPERTY_TYPE.COMBO,
     id: "resolutionMode",
     name: "Resolution mode",
-    desc: "How the object is pushed out of a wall. 'Minimum push' moves it the shortest way out (best for most games). 'Axis X only' and 'Axis Y only' push it out sideways or up and down only. 'Nearest open space' searches around for the closest free spot (slower; best used through the Eject action).",
+    desc: "How the object is pushed out of a wall. 'Minimum push' moves it the shortest way out (best for most games). 'Axis X only' and 'Axis Y only' push it out sideways or up and down only. 'Nearest open space' searches around for the closest free spot (slower; best used through the Eject action). 'Swept' traces the path from the object's last position to where you moved it and stops at the first wall, so a fast move (such as a mouse drag with Drag & Drop) cannot tunnel through or pop out the far side.",
     options: {
       initialValue: "minimum_push",
       items: [
@@ -102,6 +98,7 @@ export const properties = [
         { axis_x: "Axis X only" },
         { axis_y: "Axis Y only" },
         { nearest_open: "Nearest open space" },
+        { swept: "Swept (continuous)" },
       ],
     },
   },
@@ -160,6 +157,81 @@ export const properties = [
     options: {
       initialValue: 0.5,
       minValue: 0,
+    },
+  },
+  {
+    type: PROPERTY_TYPE.COMBO,
+    id: "movementStyle",
+    name: "Movement style",
+    desc: "Declares the kind of game so contacts can be labelled. 'Top-down' treats every surface the same (no floor/wall/ceiling meaning) - ideal for top-down games. 'Side-scrolling' classifies each contact against the Up direction into floor, wall or ceiling, which powers the Is on floor / Is on wall / Is on ceiling conditions, the On landed / On hit wall / On hit ceiling triggers, slope readouts and jump-thru platforms.",
+    options: {
+      initialValue: "top_down",
+      items: [
+        { top_down: "Top-down" },
+        { side_scroller: "Side-scrolling" },
+      ],
+    },
+  },
+  {
+    type: PROPERTY_TYPE.COMBO,
+    id: "upDirection",
+    name: "Up direction",
+    desc: "Which screen direction points away from gravity, used to tell a floor from a ceiling in Side-scrolling style (and to land objects on jump-thru platforms). 'Up' is normal gravity (a floor is below you). Use 'Down', 'Left' or 'Right' for flipped or sideways gravity. Ignored in Top-down style.",
+    options: {
+      initialValue: "up",
+      items: [
+        { up: "Up (-Y)" },
+        { down: "Down (+Y)" },
+        { left: "Left (-X)" },
+        { right: "Right (+X)" },
+      ],
+    },
+  },
+  {
+    type: PROPERTY_TYPE.FLOAT,
+    id: "floorSlopeMax",
+    name: "Max floor slope",
+    desc: "The steepest surface, in degrees from flat, still counted as a floor (or ceiling) rather than a wall in Side-scrolling style. 45 treats anything up to a 45 degree ramp as walkable ground; a surface steeper than this is a wall. Also sets how far from level a jump-thru can tilt and still catch a landing.",
+    options: {
+      initialValue: 45,
+      minValue: 0,
+      maxValue: 90,
+    },
+  },
+  {
+    type: PROPERTY_TYPE.COMBO,
+    id: "axisResolution",
+    name: "Axis resolution",
+    desc: "How overlaps are cleared. 'Minimum' pushes out along the single shortest direction (best for top-down). 'Separate (gravity axis first)' clears the gravity axis (floors and ceilings) before the cross axis (walls), which gives platformers the stable land-then-touch-wall behaviour and clean corners.",
+    options: {
+      initialValue: "minimum",
+      items: [
+        { minimum: "Minimum" },
+        { separate: "Separate (gravity axis first)" },
+      ],
+    },
+  },
+  {
+    type: PROPERTY_TYPE.COMBO,
+    id: "jumpthruSource",
+    name: "Jump-thru",
+    desc: "Adds one-way platforms you can stand on from above but pass through from below or the side. 'None' disables them. 'Jump-thru behavior' uses every object carrying Construct's built-in Jump-thru behavior, with no setup. 'Custom' uses the object types you register with the Add jump-thru action. Needs an Up direction to know which way is 'down onto' the platform.",
+    options: {
+      initialValue: "none",
+      items: [
+        { none: "None" },
+        { jumpthru: "Jump-thru behavior" },
+        { custom: "Custom" },
+      ],
+    },
+  },
+  {
+    type: PROPERTY_TYPE.CHECK,
+    id: "enabled",
+    name: "Enabled",
+    desc: "Turn the whole behavior on or off. When off, the object is never pushed out of walls. You can change this while the game runs with the Set enabled action.",
+    options: {
+      initialValue: true,
     },
   },
 ];

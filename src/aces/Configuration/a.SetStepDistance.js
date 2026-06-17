@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Set step distance",
-  displayText: "Set step distance to {0} px",
+  displayText: "{my} Set step distance to {0} px",
   description:
     "Set the maximum distance moved per step, in pixels. Movement is broken into steps no larger than this. Set to 0 to disable stepping.",
   params: [

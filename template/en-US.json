@@ -9,22 +9,21 @@
         "help-url": "https://www.construct.net",
         "aceCategories": {
           "Configuration": "Configuration",
+          "Jumpthru": "Jump-thru",
           "Resolution": "Resolution",
-          "Solids": "Solids"
+          "Solids": "Solids",
+          "Surfaces": "Surfaces"
         },
         "properties": {
-          "enabled": {
-            "name": "Enabled",
-            "desc": "Turn the whole behavior on or off. When off, the object is never pushed out of walls. You can change this while the game runs with the Set enabled action."
-          },
           "resolutionMode": {
             "name": "Resolution mode",
-            "desc": "How the object is pushed out of a wall. 'Minimum push' moves it the shortest way out (best for most games). 'Axis X only' and 'Axis Y only' push it out sideways or up and down only. 'Nearest open space' searches around for the closest free spot (slower; best used through the Eject action).",
+            "desc": "How the object is pushed out of a wall. 'Minimum push' moves it the shortest way out (best for most games). 'Axis X only' and 'Axis Y only' push it out sideways or up and down only. 'Nearest open space' searches around for the closest free spot (slower; best used through the Eject action). 'Swept' traces the path from the object's last position to where you moved it and stops at the first wall, so a fast move (such as a mouse drag with Drag & Drop) cannot tunnel through or pop out the far side.",
             "items": {
               "minimum_push": "Minimum push",
               "axis_x": "Axis X only",
               "axis_y": "Axis Y only",
-              "nearest_open": "Nearest open space"
+              "nearest_open": "Nearest open space",
+              "swept": "Swept (continuous)"
             }
           },
           "resolveOnTick": {
@@ -54,12 +53,97 @@
           "skinWidth": {
             "name": "Skin width",
             "desc": "A tiny gap, in pixels, left between the object and the wall after a push. It stops the two from being counted as touching again next frame, which can otherwise cause a 1 pixel jitter. The default of 0.5 is invisible; raise it slightly if you still see jitter."
+          },
+          "movementStyle": {
+            "name": "Movement style",
+            "desc": "Declares the kind of game so contacts can be labelled. 'Top-down' treats every surface the same (no floor/wall/ceiling meaning) - ideal for top-down games. 'Side-scrolling' classifies each contact against the Up direction into floor, wall or ceiling, which powers the Is on floor / Is on wall / Is on ceiling conditions, the On landed / On hit wall / On hit ceiling triggers, slope readouts and jump-thru platforms.",
+            "items": {
+              "top_down": "Top-down",
+              "side_scroller": "Side-scrolling"
+            }
+          },
+          "upDirection": {
+            "name": "Up direction",
+            "desc": "Which screen direction points away from gravity, used to tell a floor from a ceiling in Side-scrolling style (and to land objects on jump-thru platforms). 'Up' is normal gravity (a floor is below you). Use 'Down', 'Left' or 'Right' for flipped or sideways gravity. Ignored in Top-down style.",
+            "items": {
+              "up": "Up (-Y)",
+              "down": "Down (+Y)",
+              "left": "Left (-X)",
+              "right": "Right (+X)"
+            }
+          },
+          "floorSlopeMax": {
+            "name": "Max floor slope",
+            "desc": "The steepest surface, in degrees from flat, still counted as a floor (or ceiling) rather than a wall in Side-scrolling style. 45 treats anything up to a 45 degree ramp as walkable ground; a surface steeper than this is a wall. Also sets how far from level a jump-thru can tilt and still catch a landing."
+          },
+          "axisResolution": {
+            "name": "Axis resolution",
+            "desc": "How overlaps are cleared. 'Minimum' pushes out along the single shortest direction (best for top-down). 'Separate (gravity axis first)' clears the gravity axis (floors and ceilings) before the cross axis (walls), which gives platformers the stable land-then-touch-wall behaviour and clean corners.",
+            "items": {
+              "minimum": "Minimum",
+              "separate": "Separate (gravity axis first)"
+            }
+          },
+          "jumpthruSource": {
+            "name": "Jump-thru",
+            "desc": "Adds one-way platforms you can stand on from above but pass through from below or the side. 'None' disables them. 'Jump-thru behavior' uses every object carrying Construct's built-in Jump-thru behavior, with no setup. 'Custom' uses the object types you register with the Add jump-thru action. Needs an Up direction to know which way is 'down onto' the platform.",
+            "items": {
+              "none": "None",
+              "jumpthru": "Jump-thru behavior",
+              "custom": "Custom"
+            }
+          },
+          "enabled": {
+            "name": "Enabled",
+            "desc": "Turn the whole behavior on or off. When off, the object is never pushed out of walls. You can change this while the game runs with the Set enabled action."
           }
         },
         "actions": {
+          "SetAxisResolution": {
+            "list-name": "Set axis resolution",
+            "display-text": "{my} Set axis resolution to {0}",
+            "description": "Choose how overlaps are cleared. Minimum pushes along the single shortest direction (best for top-down). Separate clears the gravity axis before the cross axis, the stable land-then-touch-wall behaviour platformers expect.",
+            "params": {
+              "mode": {
+                "name": "Mode",
+                "desc": "The axis resolution mode to use.",
+                "items": {
+                  "minimum": "Minimum",
+                  "separate": "Separate (gravity axis first)"
+                }
+              }
+            }
+          },
+          "SetFloorSlopeMax": {
+            "list-name": "Set max floor slope",
+            "display-text": "{my} Set max floor slope to {0} degrees",
+            "description": "Set the steepest surface, in degrees from flat, still counted as a floor (or ceiling) rather than a wall. Also limits how far a jump-thru can tilt and still catch a landing. Clamped to 0-90.",
+            "params": {
+              "degrees": {
+                "name": "Degrees",
+                "desc": "The maximum floor slope in degrees (0 to 90)."
+              }
+            }
+          },
+          "SetJumpthruSource": {
+            "list-name": "Set jump-thru source",
+            "display-text": "{my} Set jump-thru source to {0}",
+            "description": "Choose where one-way platforms come from. None disables them. Jump-thru behavior uses every object with the built-in Jump-thru behavior. Custom uses the types added with Add jump-thru.",
+            "params": {
+              "source": {
+                "name": "Source",
+                "desc": "The jump-thru source to use.",
+                "items": {
+                  "none": "None",
+                  "jumpthru": "Jump-thru behavior",
+                  "custom": "Custom"
+                }
+              }
+            }
+          },
           "SetMaxPushPerTick": {
             "list-name": "Set max push per tick",
-            "display-text": "Set max push per tick to {0} px",
+            "display-text": "{my} Set max push per tick to {0} px",
             "description": "Set the maximum length of a single correction, in pixels. Set to 0 for no limit.",
             "params": {
               "pixels": {
@@ -68,9 +152,24 @@
               }
             }
           },
+          "SetMovementStyle": {
+            "list-name": "Set movement style",
+            "display-text": "{my} Set movement style to {0}",
+            "description": "Choose whether contacts are labelled. Top-down treats every surface the same; Side-scrolling classifies each contact against the Up direction into floor, wall or ceiling.",
+            "params": {
+              "style": {
+                "name": "Style",
+                "desc": "The movement style to use.",
+                "items": {
+                  "top_down": "Top-down",
+                  "side_scroller": "Side-scrolling"
+                }
+              }
+            }
+          },
           "SetObstacles": {
             "list-name": "Set obstacles",
-            "display-text": "Set obstacles to {0}",
+            "display-text": "{my} Set obstacles to {0}",
             "description": "Choose which objects count as walls: Custom uses the types added with Add solid, Solids uses every object with the built-in Solid behavior.",
             "params": {
               "mode": {
@@ -85,7 +184,7 @@
           },
           "SetResolutionMode": {
             "list-name": "Set resolution mode",
-            "display-text": "Set resolution mode to {0}",
+            "display-text": "{my} Set resolution mode to {0}",
             "description": "Set how the push-out correction is computed.",
             "params": {
               "mode": {
@@ -95,14 +194,15 @@
                   "minimum_push": "Minimum push",
                   "axis_x": "Axis X only",
                   "axis_y": "Axis Y only",
-                  "nearest_open": "Nearest open space"
+                  "nearest_open": "Nearest open space",
+                  "swept": "Swept (continuous)"
                 }
               }
             }
           },
           "SetSkinWidth": {
             "list-name": "Set skin width",
-            "display-text": "Set skin width to {0} px",
+            "display-text": "{my} Set skin width to {0} px",
             "description": "Set the gap kept between this object and solids after a push, in pixels.",
             "params": {
               "pixels": {
@@ -113,7 +213,7 @@
           },
           "SetSlideFriction": {
             "list-name": "Set slide friction",
-            "display-text": "Set slide friction to {0}%",
+            "display-text": "{my} Set slide friction to {0}%",
             "description": "Set the fraction of along-surface speed lost per resolution, from 0 (frictionless) to 1 (full stop). Values are clamped to that range.",
             "params": {
               "friction": {
@@ -124,7 +224,7 @@
           },
           "SetSlidingEnabled": {
             "list-name": "Set sliding enabled",
-            "display-text": "Set sliding enabled to {0}",
+            "display-text": "{my} Set sliding enabled to {0}",
             "description": "Set whether the object slides along solid surfaces instead of stopping at them.",
             "params": {
               "enabled": {
@@ -135,7 +235,7 @@
           },
           "SetStepDistance": {
             "list-name": "Set step distance",
-            "display-text": "Set step distance to {0} px",
+            "display-text": "{my} Set step distance to {0} px",
             "description": "Set the maximum distance moved per step, in pixels. Movement is broken into steps no larger than this. Set to 0 to disable stepping.",
             "params": {
               "distance": {
@@ -144,9 +244,54 @@
               }
             }
           },
+          "SetUpDirection": {
+            "list-name": "Set up direction",
+            "display-text": "{my} Set up direction to {0}",
+            "description": "Set which screen direction points away from gravity. Used in Side-scrolling style to tell a floor from a ceiling and to land objects on jump-thru platforms.",
+            "params": {
+              "direction": {
+                "name": "Direction",
+                "desc": "The screen direction that points away from gravity.",
+                "items": {
+                  "up": "Up (-Y)",
+                  "down": "Down (+Y)",
+                  "left": "Left (-X)",
+                  "right": "Right (+X)"
+                }
+              }
+            }
+          },
+          "AddJumpthru": {
+            "list-name": "Add jump-thru",
+            "display-text": "{my} Add {0} as a jump-thru",
+            "description": "Add an object type as a one-way platform for this object (used when Jump-thru source is Custom). The object can stand on instances of that type from above but pass through from below or the side.",
+            "params": {
+              "object": {
+                "name": "Object",
+                "desc": "The object type to treat as a one-way platform."
+              }
+            }
+          },
+          "ClearJumpthrus": {
+            "list-name": "Clear jump-thrus",
+            "display-text": "{my} Clear all jump-thrus",
+            "description": "Remove all object types from this object's jump-thru registry.",
+            "params": {}
+          },
+          "RemoveJumpthru": {
+            "list-name": "Remove jump-thru",
+            "display-text": "{my} Remove {0} from jump-thrus",
+            "description": "Stop treating an object type as a one-way platform for this object.",
+            "params": {
+              "object": {
+                "name": "Object",
+                "desc": "The object type to stop treating as a one-way platform."
+              }
+            }
+          },
           "EjectToNearestOpenSpace": {
             "list-name": "Eject to nearest open space",
-            "display-text": "Eject to nearest open space within {0} px",
+            "display-text": "{my} Eject to nearest open space within {0} px",
             "description": "Search outward for the closest position where this object overlaps no solid, up to the given radius in pixels, and move it there. Triggers On ejected on success or On eject failed otherwise.",
             "params": {
               "maxRadius": {
@@ -163,7 +308,7 @@
           },
           "SetEnabled": {
             "list-name": "Set enabled",
-            "display-text": "Set enabled to {0}",
+            "display-text": "{my} Set enabled to {0}",
             "description": "Set whether the behavior resolves.",
             "params": {
               "enabled": {
@@ -174,7 +319,7 @@
           },
           "AddSolid": {
             "list-name": "Add solid",
-            "display-text": "Add {0} as a solid",
+            "display-text": "{my} Add {0} as a solid",
             "description": "Add an object type as a solid for this object. Instances of that type will push this object out. Adding the same type twice has no effect.",
             "params": {
               "object": {
@@ -185,13 +330,13 @@
           },
           "ClearSolids": {
             "list-name": "Clear solids",
-            "display-text": "Clear all solids",
+            "display-text": "{my} Clear all solids",
             "description": "Remove all object types from this object's solid registry.",
             "params": {}
           },
           "RemoveSolid": {
             "list-name": "Remove solid",
-            "display-text": "Remove {0} from solids",
+            "display-text": "{my} Remove {0} from solids",
             "description": "Stop treating an object type as a solid for this object.",
             "params": {
               "object": {
@@ -202,63 +347,74 @@
           }
         },
         "conditions": {
+          "IsJumpthru": {
+            "list-name": "Is jump-thru",
+            "display-text": "{my} {0} is registered as a jump-thru",
+            "description": "True if the given object type is registered as a one-way platform for this object.",
+            "params": {
+              "object": {
+                "name": "Object",
+                "desc": "The object type to check."
+              }
+            }
+          },
           "IsEnabled": {
             "list-name": "Is enabled",
-            "display-text": "Is enabled",
+            "display-text": "{my} Is enabled",
             "description": "True if the behavior is enabled.",
             "params": {}
           },
           "IsOverlappingSolid": {
             "list-name": "Is overlapping solid",
-            "display-text": "Is overlapping a solid",
+            "display-text": "{my} Is overlapping a solid",
             "description": "True if this object currently overlaps at least one registered solid.",
             "params": {}
           },
           "IsSliding": {
             "list-name": "Is sliding",
-            "display-text": "Is sliding",
+            "display-text": "{my} Is sliding",
             "description": "True if the last resolution preserved along-surface movement.",
             "params": {}
           },
           "IsTrapped": {
             "list-name": "Is trapped",
-            "display-text": "Is trapped",
+            "display-text": "{my} Is trapped",
             "description": "True if the last resolution left this object wedged against opposing solids.",
             "params": {}
           },
           "OnBecameTrapped": {
             "list-name": "On became trapped",
-            "display-text": "On became trapped",
+            "display-text": "{my} On became trapped",
             "description": "Triggered when a resolution cannot free the object because it overlaps solids on opposing sides. OverlapCount reports how many solids it is wedged against.",
             "params": {}
           },
           "OnEjected": {
             "list-name": "On ejected",
-            "display-text": "On ejected",
+            "display-text": "{my} On ejected",
             "description": "Triggered after Eject to nearest open space succeeds. LastPushX and LastPushY give the offset from the original to the ejected position.",
             "params": {}
           },
           "OnEjectFailed": {
             "list-name": "On eject failed",
-            "display-text": "On eject failed",
+            "display-text": "{my} On eject failed",
             "description": "Triggered when Eject to nearest open space finds no open position within the radius. The object is left at its original position.",
             "params": {}
           },
           "OnPushedOut": {
             "list-name": "On pushed out",
-            "display-text": "On pushed out",
+            "display-text": "{my} On pushed out",
             "description": "Triggered after a resolution applies a non-zero correction. The LastPush, SurfaceNormal, Slide and OverlapCount expressions describe the correction just applied.",
             "params": {}
           },
           "OnStep": {
             "list-name": "On step",
-            "display-text": "On step",
+            "display-text": "{my} On step",
             "description": "Triggered for each step this object moves in, when stepping is enabled. Use it to make additional collision tests during fast movement. StepIndex and StepCount are available, and the object is at the current step's resolved position.",
             "params": {}
           },
           "IsSolid": {
             "list-name": "Is solid",
-            "display-text": "{0} is registered as a solid",
+            "display-text": "{my} {0} is registered as a solid",
             "description": "True if the given object type is registered as a solid for this object.",
             "params": {
               "object": {
@@ -266,12 +422,80 @@
                 "desc": "The object type to check."
               }
             }
+          },
+          "IsOnCeiling": {
+            "list-name": "Is on ceiling",
+            "display-text": "{my} Is on ceiling",
+            "description": "True if the last resolution pushed the object off a ceiling (a surface facing against the Up direction). Only meaningful in Side-scrolling movement style.",
+            "params": {}
+          },
+          "IsOnFloor": {
+            "list-name": "Is on floor",
+            "display-text": "{my} Is on floor",
+            "description": "True if the last resolution pushed the object off a floor (a surface facing the Up direction). Only meaningful in Side-scrolling movement style.",
+            "params": {}
+          },
+          "IsOnSlope": {
+            "list-name": "Is on slope",
+            "display-text": "{my} Is on slope",
+            "description": "True if the object is on a floor that is tilted (not level) - i.e. on floor with a non-zero slope angle. Only meaningful in Side-scrolling movement style.",
+            "params": {}
+          },
+          "IsOnWall": {
+            "list-name": "Is on wall",
+            "display-text": "{my} Is on wall",
+            "description": "True if the last resolution pushed the object off a wall (a surface too steep to be a floor or ceiling). Only meaningful in Side-scrolling movement style.",
+            "params": {}
+          },
+          "OnHitCeiling": {
+            "list-name": "On hit ceiling",
+            "display-text": "{my} On hit ceiling",
+            "description": "Triggered on the resolution where the object first gains a ceiling contact (it bumped its head). Side-scrolling movement style only.",
+            "params": {}
+          },
+          "OnHitWall": {
+            "list-name": "On hit wall",
+            "display-text": "{my} On hit wall",
+            "description": "Triggered on the resolution where the object first gains a wall contact. Read WallSide for which side the wall is on. Side-scrolling movement style only.",
+            "params": {}
+          },
+          "OnLanded": {
+            "list-name": "On landed",
+            "display-text": "{my} On landed",
+            "description": "Triggered on the resolution where the object first gains a floor contact (it landed). Side-scrolling movement style only.",
+            "params": {}
+          },
+          "OnLeftFloor": {
+            "list-name": "On left floor",
+            "display-text": "{my} On left floor",
+            "description": "Triggered on the resolution where the object loses its floor contact (it walked off an edge or was lifted away). Side-scrolling movement style only.",
+            "params": {}
           }
         },
         "expressions": {
+          "MovementStyle": {
+            "translated-name": "MovementStyle",
+            "description": "The current movement style key (top_down or side_scroller).",
+            "params": {}
+          },
           "ResolutionMode": {
             "translated-name": "ResolutionMode",
-            "description": "The current resolution mode key (minimum_push, axis_x, axis_y or nearest_open).",
+            "description": "The current resolution mode key (minimum_push, axis_x, axis_y, nearest_open or swept).",
+            "params": {}
+          },
+          "GetJumpthruByIndex": {
+            "translated-name": "GetJumpthruByIndex",
+            "description": "The name of the registered jump-thru object type at the given 0-based index.",
+            "params": {
+              "index": {
+                "name": "Index",
+                "desc": "The 0-based position in the jump-thru registry."
+              }
+            }
+          },
+          "JumpthruCount": {
+            "translated-name": "JumpthruCount",
+            "description": "The number of object types currently registered as jump-thrus.",
             "params": {}
           },
           "LastPushDistance": {
@@ -342,6 +566,31 @@
           "SolidCount": {
             "translated-name": "SolidCount",
             "description": "The number of object types currently registered as solids.",
+            "params": {}
+          },
+          "FloorNormalX": {
+            "translated-name": "FloorNormalX",
+            "description": "The X component of the unit normal of the last floor contact (points away from the floor). 0 if no floor has been contacted.",
+            "params": {}
+          },
+          "FloorNormalY": {
+            "translated-name": "FloorNormalY",
+            "description": "The Y component of the unit normal of the last floor contact (points away from the floor). 0 if no floor has been contacted.",
+            "params": {}
+          },
+          "SlopeAngle": {
+            "translated-name": "SlopeAngle",
+            "description": "The signed angle of the current floor relative to level, in degrees. 0 on flat ground; positive when the floor tilts down toward the object's right. Meaningful while Is on floor is true.",
+            "params": {}
+          },
+          "TicksSinceFloor": {
+            "translated-name": "TicksSinceFloor",
+            "description": "How many resolutions have passed since the object was last on a floor. 0 while on the floor; grows once it leaves. Use it for coyote time (allow a jump for a few ticks after leaving a ledge). Only updates while Resolve on tick is on.",
+            "params": {}
+          },
+          "WallSide": {
+            "translated-name": "WallSide",
+            "description": "Which side a contacted wall is on, relative to the Up direction: -1 wall on the object's left, +1 wall on its right, 0 if not on a wall.",
             "params": {}
           }
         }

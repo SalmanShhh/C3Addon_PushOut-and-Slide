@@ -2,7 +2,7 @@ export const config = {
   highlight: false,
   isDeprecated: false,
   listName: "Is enabled",
-  displayText: "Is enabled",
+  displayText: "{my} Is enabled",
   description: "True if the behavior is enabled.",
   params: [],
 };

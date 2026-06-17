@@ -3,7 +3,7 @@ export const config = {
   isDeprecated: false,
   isAsync: false,
   listName: "Add solid",
-  displayText: "Add {0} as a solid",
+  displayText: "{my} Add {0} as a solid",
   description:
     "Add an object type as a solid for this object. Instances of that type will push this object out. Adding the same type twice has no effect.",
   params: [

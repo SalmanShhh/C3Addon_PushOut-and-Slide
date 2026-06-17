@@ -7,12 +7,26 @@ import AddonTypeMap from "../../template/addonTypeMap.js";
 // No internal engine push-out routine is ever called.
 // ---------------------------------------------------------------------------
 
-const MODE_KEYS = ["minimum_push", "axis_x", "axis_y", "nearest_open"];
+const MODE_KEYS = ["minimum_push", "axis_x", "axis_y", "nearest_open", "swept"];
 // Obstacle source, matching the "Obstacles" combo item order in config.caw.js.
 const OBSTACLE_MODES = ["custom", "solids"];
+// New combos, matching their item order in config.caw.js.
+const MOVEMENT_STYLES = ["top_down", "side_scroller"];
+const UP_DIRS = ["up", "down", "left", "right"];
+// Unit "up" (away from gravity) vector for each Up direction option.
+const UP_VECTORS = {
+  up: [0, -1],
+  down: [0, 1],
+  left: [-1, 0],
+  right: [1, 0],
+};
+const AXIS_RES_MODES = ["minimum", "separate"];
+const JUMPTHRU_SOURCES = ["none", "jumpthru", "custom"];
 const MAX_PASSES = 4; // bounded de-penetration passes per resolution
 const MAX_STEPS = 100; // cap on sub-steps so a teleport cannot explode cost
 const EJECT_SAMPLES = 16; // ring samples for the nearest-open search
+const MAX_SWEEP_ITERS = 256; // cap on swept-march samples so a huge drag is bounded
+const SWEEP_MIN_STEP = 4; // default swept granularity (px) when Step distance is 0
 
 function projectPoly(points, ax, ay) {
   let min = Infinity;
@@ -103,25 +117,33 @@ export default function (parentClass) {
 
       // --- Solid registry (per behavior instance) -----------------------
       this._solidTypes = new Set(); // Set<IObjectType>
+      this._jumpthruTypes = new Set(); // Set<IObjectType> one-way platforms (Custom source)
       this._worldTypesCache = null; // cached world object types for the Solid-behavior union
 
       // --- Configuration (read each resolution; change live) ------------
-      // Property declaration order from config.caw.js:
-      // 0 enabled, 1 resolutionMode, 2 resolveOnTick, 3 enableSliding,
-      // 4 slideFriction, 5 stepDistance, 6 obstacles, 7 skinWidth
+      // Property declaration order from config.caw.js (Enabled is kept last in
+      // the panel, so it is the final index):
+      // 0 resolutionMode, 1 resolveOnTick, 2 enableSliding, 3 slideFriction,
+      // 4 stepDistance, 5 obstacles, 6 skinWidth, 7 movementStyle, 8 upDirection,
+      // 9 floorSlopeMax, 10 axisResolution, 11 jumpthruSource, 12 enabled
       // Max push per tick is not a property; it defaults to 0 (no limit) and is
       // changed at runtime with the Set max push per tick action.
       const properties = this._getInitProperties();
       if (properties) {
-        this._enabled = properties[0] !== false;
-        this._resolutionMode = MODE_KEYS[properties[1]] || "minimum_push";
-        this._resolveOnTick = properties[2] !== false;
-        this._slidingEnabled = properties[3] !== false;
-        this._slideFriction = this._clamp01(properties[4] || 0);
-        this._stepDistance = Math.max(0, properties[5] || 0);
-        this._obstacleMode = OBSTACLE_MODES[properties[6]] || "solids";
+        this._resolutionMode = MODE_KEYS[properties[0]] || "minimum_push";
+        this._resolveOnTick = properties[1] !== false;
+        this._slidingEnabled = properties[2] !== false;
+        this._slideFriction = this._clamp01(properties[3] || 0);
+        this._stepDistance = Math.max(0, properties[4] || 0);
+        this._obstacleMode = OBSTACLE_MODES[properties[5]] || "solids";
         this._maxPushPerTick = 0;
-        this._skinWidth = Math.max(0, properties[7] != null ? properties[7] : 0.5);
+        this._skinWidth = Math.max(0, properties[6] != null ? properties[6] : 0.5);
+        this._movementStyle = MOVEMENT_STYLES[properties[7]] || "top_down";
+        this._upDir = UP_DIRS[properties[8]] || "up";
+        this._floorSlopeMax = this._clampAngle(properties[9], 45);
+        this._axisResolution = AXIS_RES_MODES[properties[10]] || "minimum";
+        this._jumpthruSource = JUMPTHRU_SOURCES[properties[11]] || "none";
+        this._enabled = properties[12] !== false;
       } else {
         this._enabled = true;
         this._resolutionMode = "minimum_push";
@@ -132,6 +154,11 @@ export default function (parentClass) {
         this._obstacleMode = "solids";
         this._maxPushPerTick = 0;
         this._skinWidth = 0.5;
+        this._movementStyle = "top_down";
+        this._upDir = "up";
+        this._floorSlopeMax = 45;
+        this._axisResolution = "minimum";
+        this._jumpthruSource = "none";
       }
 
       // --- Transient resolution outputs (exposed via expressions) -------
@@ -148,6 +175,20 @@ export default function (parentClass) {
       this._stepIndex = 0;
       this._isSliding = false;
       this._isTrapped = false;
+
+      // --- Surface classification (Side-scrolling style) ----------------
+      this._onFloor = false;
+      this._onWall = false;
+      this._onCeiling = false;
+      this._floorNX = 0; // unit normal of the last floor contact
+      this._floorNY = 0;
+      this._slopeAngle = 0; // signed degrees of the floor relative to level
+      this._wallSide = 0; // -1 wall on the object's left, +1 on its right, 0 none
+      this._ticksSinceFloor = 999; // frames since last floor contact (coyote time)
+      // Previous-resolution classification, for rising-edge triggers.
+      this._wasOnFloor = false;
+      this._wasOnWall = false;
+      this._wasOnCeiling = false;
 
       // --- State for sliding / corner stabilisation ---------------------
       this._lastResolvedX = 0;
@@ -231,6 +272,67 @@ export default function (parentClass) {
       if (v < 0) return 0;
       if (v > 1) return 1;
       return v;
+    }
+
+    _clampAngle(v, fallback) {
+      v = +v;
+      if (!isFinite(v)) return fallback;
+      if (v < 0) return 0;
+      if (v > 90) return 90;
+      return v;
+    }
+
+    // Unit "up" vector (away from gravity) from the Up direction property.
+    _upVec() {
+      return UP_VECTORS[this._upDir] || UP_VECTORS.up;
+    }
+
+    // Whether floor/wall/ceiling classification is active this run.
+    _classifyEnabled() {
+      return this._movementStyle === "side_scroller";
+    }
+
+    // ----- Contact classification (floor / wall / ceiling) --------------
+
+    // Reset per-resolution classification before a fresh _doResolution pass.
+    _beginClassification() {
+      this._wasOnFloor = this._onFloor;
+      this._wasOnWall = this._onWall;
+      this._wasOnCeiling = this._onCeiling;
+      this._onFloor = false;
+      this._onWall = false;
+      this._onCeiling = false;
+      this._wallSide = 0;
+      // _floorNX/_floorNY/_slopeAngle persist until a new floor contact replaces them.
+    }
+
+    // Label a single applied push normal (unit, pointing away from the surface
+    // toward this object) as floor, ceiling or wall, relative to the up vector.
+    _classifyNormal(nx, ny) {
+      if (!this._classifyEnabled()) return;
+      const l = Math.hypot(nx, ny);
+      if (l <= 1e-6) return;
+      nx /= l;
+      ny /= l;
+      const up = this._upVec();
+      const dotUp = nx * up[0] + ny * up[1]; // +1 floor, -1 ceiling
+      const cosMax = Math.cos((this._floorSlopeMax * Math.PI) / 180);
+      if (dotUp >= cosMax) {
+        this._onFloor = true;
+        this._floorNX = nx;
+        this._floorNY = ny;
+        // Signed slope angle: + when the floor tips toward the object's right.
+        const right = [-up[1], up[0]];
+        const tilt = Math.acos(Math.max(-1, Math.min(1, dotUp))) * (180 / Math.PI);
+        this._slopeAngle = nx * right[0] + ny * right[1] < 0 ? tilt : -tilt;
+      } else if (dotUp <= -cosMax) {
+        this._onCeiling = true;
+      } else {
+        this._onWall = true;
+        const right = [-up[1], up[0]];
+        // Pushed toward -right means the wall is on the object's right.
+        this._wallSide = nx * right[0] + ny * right[1] > 0 ? -1 : 1;
+      }
     }
 
     _teleportThreshold() {
@@ -352,7 +454,7 @@ export default function (parentClass) {
       return out;
     }
 
-    _gatherOverlapping(earlyExit) {
+    _gatherOverlapping(earlyExit, includeJumpthru) {
       const inst = this.instance;
       const result = [];
       const seen = new Set();
@@ -373,31 +475,113 @@ export default function (parentClass) {
         // bounded resolution loop calls this repeatedly to clear several solids.
         if (typeof inst.testOverlapSolid === "function") {
           consider(inst.testOverlapSolid());
-          return result;
+        } else {
+          // Fallback for runtimes without testOverlapSolid: scan world types
+          // and keep only instances carrying an enabled Solid behavior.
+          const candidates = this._collisionCandidates(this._worldTypes(), this._broadRect());
+          for (let i = 0; i < candidates.length; i++) {
+            if (!this._instHasEnabledSolid(candidates[i])) continue;
+            if (consider(candidates[i]) && earlyExit && !includeJumpthru) return result;
+          }
         }
-        // Fallback for runtimes without testOverlapSolid: scan world types and
-        // keep only instances carrying an enabled Solid behavior.
-        const candidates = this._collisionCandidates(this._worldTypes(), this._broadRect());
-        for (let i = 0; i < candidates.length; i++) {
-          if (!this._instHasEnabledSolid(candidates[i])) continue;
-          if (consider(candidates[i]) && earlyExit) return result;
+      } else {
+        // Custom mode: only the object types added via Add solid.
+        const explicitTypes = [...this._solidTypes];
+        if (explicitTypes.length) {
+          const candidates = this._collisionCandidates(explicitTypes, this._broadRect());
+          for (let i = 0; i < candidates.length; i++) {
+            if (consider(candidates[i]) && earlyExit && !includeJumpthru) return result;
+          }
         }
-        return result;
       }
 
-      // Custom mode: only the object types added via Add solid.
-      const explicitTypes = [...this._solidTypes];
-      if (!explicitTypes.length) return result;
-      const candidates = this._collisionCandidates(explicitTypes, this._broadRect());
-      for (let i = 0; i < candidates.length; i++) {
-        if (consider(candidates[i]) && earlyExit) return result;
-      }
+      if (includeJumpthru) this._gatherJumpthru(result, seen);
       return result;
+    }
+
+    // Append one-way platform contacts that the object is currently landing on.
+    // A jump-thru only blocks when the push would lift the object up onto it
+    // (a floor-like normal) and the object came down onto it from above, so it
+    // can still be passed through from below or the side.
+    _gatherJumpthru(result, seen) {
+      if (this._jumpthruSource === "none") return;
+      const inst = this.instance;
+      if (typeof inst.testOverlap !== "function") return;
+
+      let candidates;
+      if (this._jumpthruSource === "custom") {
+        const types = [...this._jumpthruTypes];
+        if (!types.length) return;
+        candidates = this._collisionCandidates(types, this._broadRect());
+      } else {
+        // "jumpthru": every instance carrying an enabled Jump-thru behavior.
+        candidates = this._collisionCandidates(this._worldTypes(), this._broadRect());
+      }
+
+      const up = this._upVec();
+      const cosMax = Math.cos((this._floorSlopeMax * Math.PI) / 180);
+      // Where the object was before this tick's movement (for the from-above test).
+      const prevDX = this._lastResolvedX - inst.x;
+      const prevDY = this._lastResolvedY - inst.y;
+
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        if (!c || c === inst || seen.has(c)) continue;
+        if (this._jumpthruSource === "jumpthru" && !this._instHasEnabledJumpthru(c)) continue;
+        seen.add(c);
+        if (!inst.testOverlap(c)) continue;
+        const sat = this._computeSAT(inst, c);
+        if (!sat || sat.depth <= 0) continue;
+        // Only a floor-like (upward) push counts as landing on the platform.
+        if (sat.nx * up[0] + sat.ny * up[1] < cosMax) continue;
+        // Must have come from above: the object's previous footprint cleared
+        // the platform's top edge along the up axis.
+        if (!this._cameFromAbove(c, prevDX, prevDY, up)) continue;
+        result.push({ inst: c, nx: sat.nx, ny: sat.ny, depth: sat.depth, oneWay: true });
+      }
+    }
+
+    // True if the object, at its previous position (current + delta), was clear
+    // of solid "other" on the up side - i.e. resting above it, not embedded.
+    _cameFromAbove(other, dx, dy, up) {
+      const pa = this._quadPoints(this.instance);
+      const pb = this._quadPoints(other);
+      // Shift the object's quad back to where it was before this tick's move.
+      const prev = pa.map((p) => [p[0] + dx, p[1] + dy]);
+      const aProj = projectPoly(prev, up[0], up[1]);
+      const bProj = projectPoly(pb, up[0], up[1]);
+      // On the up axis, "above" means the object's trailing (down) edge was at
+      // or beyond the platform's top edge. A small tolerance absorbs skin width.
+      return aProj[0] >= bProj[1] - (this._skinWidth + 1);
+    }
+
+    _instHasEnabledJumpthru(inst) {
+      const bag = inst && inst.behaviors;
+      if (!bag) return false;
+      let list;
+      try {
+        list = Object.values(bag);
+      } catch (e) {
+        return false;
+      }
+      for (let i = 0; i < list.length; i++) {
+        const b = list[i];
+        if (
+          b &&
+          b.behaviorType &&
+          b.behaviorType.name === "Jumpthru" &&
+          b.isEnabled !== false
+        ) {
+          return true;
+        }
+      }
+      return false;
     }
 
     _isOverlappingAny() {
       if (!this.instance) return false;
-      return this._gatherOverlapping(true).length > 0;
+      // Open space is defined by solids only; one-way platforms never trap.
+      return this._gatherOverlapping(true, false).length > 0;
     }
 
     _computeSAT(a, b) {
@@ -405,6 +589,11 @@ export default function (parentClass) {
     }
 
     _computePush(entry, mode) {
+      // One-way platforms always pop straight out along their floor normal, so a
+      // fixed-axis mode can never shove the object sideways through one.
+      if (entry.oneWay) {
+        return { nx: entry.nx, ny: entry.ny, dist: entry.depth };
+      }
       if (mode === "axis_x" || mode === "axis_y") {
         const pa = this._quadPoints(this.instance);
         const pb = this._quadPoints(entry.inst);
@@ -437,42 +626,71 @@ export default function (parentClass) {
         };
       }
 
-      let nX = 0;
-      let nY = 0;
-      let pushedX = 0;
-      let pushedY = 0;
-      let firstOverlapCount = 0;
-      let moved = false;
+      const firstOverlapCount = this._gatherOverlapping(false, true).length;
+      const acc = { nX: 0, nY: 0, pushX: 0, pushY: 0, moved: false };
 
-      for (let pass = 0; pass < MAX_PASSES; pass++) {
-        const list = this._gatherOverlapping(false);
-        if (pass === 0) firstOverlapCount = list.length;
-        if (!list.length) break;
-        list.sort((a, b) => b.depth - a.depth); // resolve deepest first
-        const push = this._computePush(list[0], mode);
-        if (!push || push.dist <= 1e-6) break;
-        let dist = push.dist + this._skinWidth;
-        if (this._maxPushPerTick > 0) dist = Math.min(dist, this._maxPushPerTick);
-        if (dist <= 0) break;
-        inst.x += push.nx * dist;
-        inst.y += push.ny * dist;
-        pushedX += push.nx * dist;
-        pushedY += push.ny * dist;
-        nX = push.nx;
-        nY = push.ny;
-        moved = true;
-      }
+      // "Separate" axis resolution clears the gravity axis (floors/ceilings)
+      // before the cross axis (walls), which is the stable behaviour platformers
+      // expect. Each contact is still cleared along its own minimum-translation
+      // normal; only the order changes. It applies to the general modes only.
+      const separate =
+        this._axisResolution === "separate" &&
+        mode !== "axis_x" &&
+        mode !== "axis_y";
+      this._depenGenericInto(acc, mode, separate);
 
       const trapped = this._isOverlappingAny();
       return {
-        nx: nX,
-        ny: nY,
-        pushX: pushedX,
-        pushY: pushedY,
+        nx: acc.nX,
+        ny: acc.nY,
+        pushX: acc.pushX,
+        pushY: acc.pushY,
         overlapCount: firstOverlapCount,
-        moved,
+        moved: acc.moved,
         trapped,
       };
+    }
+
+    // Apply one push vector, accumulate it, and label the contact it cleared.
+    _applyPushInto(acc, push) {
+      const inst = this.instance;
+      let dist = push.dist + this._skinWidth;
+      if (this._maxPushPerTick > 0) dist = Math.min(dist, this._maxPushPerTick);
+      if (dist <= 0) return false;
+      inst.x += push.nx * dist;
+      inst.y += push.ny * dist;
+      acc.pushX += push.nx * dist;
+      acc.pushY += push.ny * dist;
+      acc.nX = push.nx;
+      acc.nY = push.ny;
+      acc.moved = true;
+      this._classifyNormal(push.nx, push.ny);
+      return true;
+    }
+
+    // Clear overlaps over a bounded number of passes. Each pass resolves one
+    // contact along its minimum-translation normal. With gravityFirst on, the
+    // contact most aligned with the up axis (floors/ceilings) is resolved before
+    // the rest (walls), giving platformers the stable land-then-touch-wall feel.
+    _depenGenericInto(acc, mode, gravityFirst) {
+      const up = gravityFirst ? this._upVec() : null;
+      for (let pass = 0; pass < MAX_PASSES; pass++) {
+        const list = this._gatherOverlapping(false, true);
+        if (!list.length) break;
+        if (gravityFirst) {
+          list.sort((a, b) => {
+            const aa = Math.abs(a.nx * up[0] + a.ny * up[1]);
+            const ba = Math.abs(b.nx * up[0] + b.ny * up[1]);
+            if (Math.abs(aa - ba) > 1e-3) return ba - aa; // gravity-aligned first
+            return b.depth - a.depth; // then deepest
+          });
+        } else {
+          list.sort((a, b) => b.depth - a.depth); // resolve deepest first
+        }
+        const push = this._computePush(list[0], mode);
+        if (!push || push.dist <= 1e-6) break;
+        if (!this._applyPushInto(acc, push)) break;
+      }
     }
 
     // ----- Sliding (preserve along-surface movement) --------------------
@@ -559,6 +777,84 @@ export default function (parentClass) {
       };
     }
 
+    // Combine two segment results (a start de-penetration and a contact result).
+    _mergeSeg(a, b) {
+      return {
+        pushX: a.pushX + b.pushX,
+        pushY: a.pushY + b.pushY,
+        nx: b.nx || a.nx,
+        ny: b.ny || a.ny,
+        overlapCount: Math.max(a.overlapCount, b.overlapCount),
+        moved: a.moved || b.moved,
+        trapped: b.trapped,
+        hadContact: a.hadContact || b.hadContact,
+      };
+    }
+
+    // Swept ("continuous") resolution. March from the last resolved position to
+    // the dragged target in safe increments and stop at the first solid contact,
+    // sliding the remaining motion along it. Because it stops at the entry side,
+    // a fast drag can neither tunnel through a thin wall nor pop out the far
+    // side. The march is capped so an arbitrarily large jump stays bounded.
+    _sweepPath(startX, startY, targetX, targetY) {
+      const inst = this.instance;
+
+      // Clear any residual overlap at the start (e.g. a wall moved into the
+      // object since last tick) without projecting a slide from it.
+      inst.x = startX;
+      inst.y = startY;
+      const startSeg = this._resolveSegment(0, 0);
+      const originX = inst.x;
+      const originY = inst.y;
+
+      const toX = targetX - originX;
+      const toY = targetY - originY;
+      const dist = Math.hypot(toX, toY);
+      if (dist <= 1e-4) {
+        // No travel this tick; settle in place (also catches jump-thru landings).
+        return this._mergeSeg(startSeg, this._resolveSegment(0, 0));
+      }
+
+      // Granularity is Step distance when set, else adaptive. Either way the
+      // sample count is clamped so the last increment always reaches the target.
+      let step =
+        this._stepDistance > 0
+          ? this._stepDistance
+          : Math.max(SWEEP_MIN_STEP, dist / MAX_SWEEP_ITERS);
+      let iters = Math.max(1, Math.ceil(dist / step));
+      if (iters > MAX_SWEEP_ITERS) {
+        iters = MAX_SWEEP_ITERS;
+        step = dist / iters;
+      }
+      const ux = toX / dist;
+      const uy = toY / dist;
+
+      let safeX = originX;
+      let safeY = originY;
+      for (let i = 1; i <= iters; i++) {
+        const d = i < iters ? i * step : dist; // last sample lands exactly on target
+        inst.x = originX + ux * d;
+        inst.y = originY + uy * d;
+        if (this._isOverlappingAny()) {
+          // First contact: push out and slide the remaining intended motion.
+          const contactSeg = this._resolveSegment(targetX - inst.x, targetY - inst.y);
+          // Entry-side guarantee: if it could not be freed (a coarse step landed
+          // it deep, or it wedged), fall back to the last clear point so it can
+          // never end up on the far side of the wall.
+          if (this._isOverlappingAny()) {
+            inst.x = safeX;
+            inst.y = safeY;
+          }
+          return this._mergeSeg(startSeg, contactSeg);
+        }
+        safeX = inst.x;
+        safeY = inst.y;
+      }
+
+      // Reached the target with no solid in the way; settle (handles jump-thru).
+      return this._mergeSeg(startSeg, this._resolveSegment(0, 0));
+    }
+
     // Publish the correction described by a result into the expression fields.
     _writeOutputs(pushX, pushY, nx, ny, overlapCount, trapped) {
       this._lastPushX = pushX;
@@ -573,15 +869,23 @@ export default function (parentClass) {
       const inst = this.instance;
       if (!inst) return;
 
+      this._beginClassification();
+
       // Movement applied since the last resolved position drives slide + stepping.
       const startX = this._lastResolvedX;
       const startY = this._lastResolvedY;
       const moveX = inst.x - startX;
       const moveY = inst.y - startY;
       const moveLen = Math.hypot(moveX, moveY);
-      const teleport = moveLen > this._teleportThreshold();
+      // Swept mode handles any jump size itself, so it bypasses the teleport and
+      // stepping classification below.
+      const swept = this._resolutionMode === "swept";
+      const teleport = !swept && moveLen > this._teleportThreshold();
       const stepping =
-        this._stepDistance > 0 && !teleport && moveLen > this._stepDistance;
+        !swept &&
+        this._stepDistance > 0 &&
+        !teleport &&
+        moveLen > this._stepDistance;
 
       // Accumulate each segment's correction for the post-tick On pushed out.
       let totalPushX = 0;
@@ -605,7 +909,13 @@ export default function (parentClass) {
         anyContact = anyContact || seg.hadContact;
       };
 
-      if (stepping) {
+      if (swept) {
+        // Cast from the last resolved position to the dragged target, stopping
+        // at the first solid contact. Robust against fast drags (Drag & Drop).
+        this._stepCount = 1;
+        this._stepIndex = 0;
+        accumulate(this._sweepPath(startX, startY, inst.x, inst.y));
+      } else if (stepping) {
         const stepCount = Math.min(
           MAX_STEPS,
           Math.max(1, Math.ceil(moveLen / this._stepDistance))
@@ -670,6 +980,21 @@ export default function (parentClass) {
 
       if (anyMoved && this._lastPushDistance > 0.0001) this._trigger("OnPushedOut");
       if (anyTrapped) this._trigger("OnBecameTrapped");
+
+      this._fireSurfaceTriggers();
+    }
+
+    // Update the coyote-time counter and fire the side-scrolling surface
+    // triggers on the tick a contact is gained or lost. Each compares this
+    // resolution's classification against the previous one captured in
+    // _beginClassification, so they fire on the edge rather than every tick.
+    _fireSurfaceTriggers() {
+      this._ticksSinceFloor = this._onFloor ? 0 : this._ticksSinceFloor + 1;
+      if (!this._classifyEnabled()) return;
+      if (this._onFloor && !this._wasOnFloor) this._trigger("OnLanded");
+      if (!this._onFloor && this._wasOnFloor) this._trigger("OnLeftFloor");
+      if (this._onWall && !this._wasOnWall) this._trigger("OnHitWall");
+      if (this._onCeiling && !this._wasOnCeiling) this._trigger("OnHitCeiling");
     }
 
     // Remember the contact normal so the next segment can blend its slide
@@ -762,6 +1087,29 @@ export default function (parentClass) {
       return t && t.name ? t.name : "";
     }
 
+    _addJumpthruType(objType) {
+      if (objType) this._jumpthruTypes.add(objType);
+    }
+
+    _removeJumpthruType(objType) {
+      if (objType) this._jumpthruTypes.delete(objType);
+    }
+
+    _clearJumpthruTypes() {
+      this._jumpthruTypes.clear();
+    }
+
+    _isJumpthruType(objType) {
+      return !!objType && this._jumpthruTypes.has(objType);
+    }
+
+    _getJumpthruNameByIndex(index) {
+      const i = Math.floor(+index);
+      if (!isFinite(i) || i < 0) return "";
+      const t = [...this._jumpthruTypes][i];
+      return t && t.name ? t.name : "";
+    }
+
     _resolveNow() {
       if (!this.instance) return;
       if (!this._initialized) this._captureRestPosition();
@@ -836,6 +1184,37 @@ export default function (parentClass) {
       this._skinWidth = isFinite(p) && p > 0 ? p : 0;
     }
 
+    // Combo params arrive as a 0-based index at runtime; also accept a key.
+    _comboKey(value, keys, fallback) {
+      if (typeof value === "number") return keys[value] || fallback;
+      if (typeof value === "string" && keys.indexOf(value) !== -1) return value;
+      return null;
+    }
+
+    _setMovementStyle(style) {
+      const k = this._comboKey(style, MOVEMENT_STYLES, "top_down");
+      if (k) this._movementStyle = k;
+    }
+
+    _setUpDirection(dir) {
+      const k = this._comboKey(dir, UP_DIRS, "up");
+      if (k) this._upDir = k;
+    }
+
+    _setFloorSlopeMax(degrees) {
+      this._floorSlopeMax = this._clampAngle(degrees, this._floorSlopeMax);
+    }
+
+    _setAxisResolution(mode) {
+      const k = this._comboKey(mode, AXIS_RES_MODES, "minimum");
+      if (k) this._axisResolution = k;
+    }
+
+    _setJumpthruSource(source) {
+      const k = this._comboKey(source, JUMPTHRU_SOURCES, "none");
+      if (k) this._jumpthruSource = k;
+    }
+
     // ----- Debugger -----------------------------------------------------
 
     _getDebuggerProperties() {
@@ -846,11 +1225,21 @@ export default function (parentClass) {
             { name: "$enabled", value: this._enabled },
             { name: "$obstacles", value: this._obstacleMode },
             { name: "$resolutionMode", value: this._resolutionMode },
+            { name: "$movementStyle", value: this._movementStyle },
+            { name: "$axisResolution", value: this._axisResolution },
             { name: "$isSliding", value: this._isSliding },
             { name: "$isTrapped", value: this._isTrapped },
+            { name: "$onFloor", value: this._onFloor },
+            { name: "$onWall", value: this._onWall },
+            { name: "$onCeiling", value: this._onCeiling },
+            { name: "$wallSide", value: this._wallSide },
+            { name: "$slopeAngle", value: this._slopeAngle },
+            { name: "$ticksSinceFloor", value: this._ticksSinceFloor },
             { name: "$overlapCount", value: this._overlapCount },
             { name: "$lastPushDistance", value: this._lastPushDistance },
             { name: "$solidCount", value: this._solidTypes.size },
+            { name: "$jumpthruSource", value: this._jumpthruSource },
+            { name: "$jumpthruCount", value: this._jumpthruTypes.size },
           ],
         },
       ];
@@ -864,6 +1253,11 @@ export default function (parentClass) {
         const sid = this._typeSid(t);
         if (sid != null) sids.push(sid);
       }
+      const jids = [];
+      for (const t of this._jumpthruTypes) {
+        const sid = this._typeSid(t);
+        if (sid != null) jids.push(sid);
+      }
       return {
         enabled: this._enabled,
         resolutionMode: this._resolutionMode,
@@ -873,7 +1267,13 @@ export default function (parentClass) {
         obstacleMode: this._obstacleMode,
         maxPushPerTick: this._maxPushPerTick,
         skinWidth: this._skinWidth,
+        movementStyle: this._movementStyle,
+        upDir: this._upDir,
+        floorSlopeMax: this._floorSlopeMax,
+        axisResolution: this._axisResolution,
+        jumpthruSource: this._jumpthruSource,
         solids: sids,
+        jumpthrus: jids,
       };
     }
 
@@ -894,12 +1294,29 @@ export default function (parentClass) {
         this._maxPushPerTick = Math.max(0, o.maxPushPerTick);
       if (typeof o.skinWidth === "number")
         this._skinWidth = Math.max(0, o.skinWidth);
+      if (MOVEMENT_STYLES.indexOf(o.movementStyle) !== -1)
+        this._movementStyle = o.movementStyle;
+      if (UP_DIRS.indexOf(o.upDir) !== -1) this._upDir = o.upDir;
+      if (typeof o.floorSlopeMax === "number")
+        this._floorSlopeMax = this._clampAngle(o.floorSlopeMax, this._floorSlopeMax);
+      if (AXIS_RES_MODES.indexOf(o.axisResolution) !== -1)
+        this._axisResolution = o.axisResolution;
+      if (JUMPTHRU_SOURCES.indexOf(o.jumpthruSource) !== -1)
+        this._jumpthruSource = o.jumpthruSource;
 
       this._solidTypes.clear();
       if (Array.isArray(o.solids)) {
         for (let i = 0; i < o.solids.length; i++) {
           const t = this._typeFromSid(o.solids[i]);
           if (t) this._solidTypes.add(t);
+        }
+      }
+
+      this._jumpthruTypes.clear();
+      if (Array.isArray(o.jumpthrus)) {
+        for (let i = 0; i < o.jumpthrus.length; i++) {
+          const t = this._typeFromSid(o.jumpthrus[i]);
+          if (t) this._jumpthruTypes.add(t);
         }
       }
     }
