@@ -1,24 +1,16 @@
 <img src="./src/icon.svg" width="100" /><br>
 # Push-Out and Slide
 <i>Push an object out of registered solids after you move it: minimum push-out, wall sliding, sub-stepping for fast movement, and a nearest-open-space eject. You drive the movement, this corrects it.</i> <br>
-### Version 1.1.0.0
+### Version 1.2.0.0
 
-[<img src="https://placehold.co/200x50/4493f8/FFF?text=Download&font=montserrat" width="200"/>](https://github.com/SalmanShhh/C3Addon_PushOut-and-Slide/releases/download/salmanshh_pushoutsolid-1.1.0.0.c3addon/salmanshh_pushoutsolid-1.1.0.0.c3addon)
+[<img src="https://placehold.co/200x50/4493f8/FFF?text=Download&font=montserrat" width="200"/>](https://github.com/SalmanShhh/C3Addon_PushOut-and-Slide/releases/download/salmanshh_pushoutsolid-1.2.0.0.c3addon/salmanshh_pushoutsolid-1.2.0.0.c3addon)
 <br>
 <sub> [See all releases](https://github.com/SalmanShhh/C3Addon_PushOut-and-Slide/releases) </sub> <br>
 
-#### What's New in 1.1.0.0
-- **Added:** - Swept (continuous) resolution mode,  traces the move and stops at the first wall; built for Drag & Drop and any large per-tick jump.
-- **Added:** - Movement style property (Top-down / Side-scrolling), classifies each contact as floor, wall or ceiling in side-scrolling games.
-- **Added:** - Up direction property (Up/Down/Left/Right) for normal, flipped, or sideways gravity.
-- **Added:** - Max floor slope property, the angle threshold separating floor/ceiling from wall (also limits jump-thru landing tilt).
-- **Added:** - Axis resolution property (Minimum / Separate (gravity axis first)), platformer-stable land-then-touch-wall ordering.
-- **Added:** - Jump-thru one-way platforms via Construct's built-in Jump-thru behavior (None / Jump-thru behavior / Custom source), with Add/Remove/Clear jump-thru, Is jump-thru, JumpthruCount, GetJumpthruByIndex
-- **Added:** - Surfaces category: conditions Is on floor/wall/ceiling/slope; triggers On landed, On left floor, On hit wall, On hit ceiling; expressions FloorNormalX/Y, SlopeAngle, WallSide, TicksSinceFloor (coyote time).
-- **Added:** New Configuration actions: Set movement style, Set up direction, Set max floor slope, Set axis resolution, Set jump-thru source; plus MovementStyle expression.
-- **Added:** - New debugger fields
-- **Changed:** - Every expression is now exposed to scripting, is fully supported via the ACEs.
-- **Changed:** - {my} icon token added to all action/condition/trigger display texts (new and existing)
+#### What's New in 1.2.0.0
+- **Changed:** - Real collision shapes: push-out now probes with the engine's testOverlap instead of bounding-box SAT.
+- **Changed:** - Swept friction: damps the actual along-wall advance, not the remaining distance to the target.
+- **Changed:** - High-friction jitter: slide/friction correction now uses the true contact normal, so the pull-back is exactly parallel to the wall.
 
 <sub>[View full changelog](#changelog)</sub>
 
@@ -60,15 +52,11 @@ npm run dev
 | --- | --- | --- |
 | Resolution mode | How the object is pushed out of a wall. 'Minimum push' moves it the shortest way out (best for most games). 'Axis X only' and 'Axis Y only' push it out sideways or up and down only. 'Nearest open space' searches around for the closest free spot (slower; best used through the Eject action). 'Swept' traces the path from the object's last position to where you moved it and stops at the first wall, so a fast move (such as a mouse drag with Drag & Drop) cannot tunnel through or pop out the far side. | combo |
 | Resolve on tick | When ticked, the object is automatically pushed out of walls every frame, right after your events move it. Untick it if you instead want to push out only at specific moments using the Resolve now action. | check |
-| Enable sliding | When ticked, an object pushed against a wall keeps sliding along it instead of stopping dead. For example, walking diagonally into a wall makes the object glide along the wall rather than getting stuck. | check |
-| Slide friction | How much the object slows down while sliding along a wall. 0% glides freely (like ice), 100% stops it the moment it touches a wall. Values in between feel grippy or draggy. | percent |
-| Step distance | For fast moving objects. Each frame the object's movement is split into small steps of at most this many pixels, so a fast object cannot jump straight through a thin wall. Set it smaller than your thinnest wall. Leave at 0 to turn stepping off. | float |
-| Obstacles | Which objects count as walls. 'Custom' uses the object types you register with the Add solid action, so each object can have its own list. 'Solids' instead uses every object that has Construct's built-in Solid behavior, with no setup needed. | combo |
+| Enable sliding | When ticked, an object pushed against a wall keeps the part of its motion that runs along the wall and glides along it - the same wall behaviour as the built-in 8-Direction behavior (moving or dragging diagonally into a wall slides along it instead of getting stuck). When unticked the object stops dead where it meets the wall and does not glide along it. | check |
+| Slide friction | How much the object is slowed as it slides along a wall while Enable sliding is on. 0% glides freely (like ice), higher values feel grippy or draggy, and 100% removes the glide so it effectively stops at the wall. Has no effect when Enable sliding is off, since the object stops dead there either way. | percent |
 | Skin width | A tiny gap, in pixels, left between the object and the wall after a push. It stops the two from being counted as touching again next frame, which can otherwise cause a 1 pixel jitter. The default of 0.5 is invisible; raise it slightly if you still see jitter. | float |
+| Obstacles | Which objects count as walls. 'Custom' uses the object types you register with the Add solid action, so each object can have its own list. 'Solids' instead uses every object that has Construct's built-in Solid behavior, with no setup needed. | combo |
 | Movement style | Declares the kind of game so contacts can be labelled. 'Top-down' treats every surface the same (no floor/wall/ceiling meaning) - ideal for top-down games. 'Side-scrolling' classifies each contact against the Up direction into floor, wall or ceiling, which powers the Is on floor / Is on wall / Is on ceiling conditions, the On landed / On hit wall / On hit ceiling triggers, slope readouts and jump-thru platforms. | combo |
-| Up direction | Which screen direction points away from gravity, used to tell a floor from a ceiling in Side-scrolling style (and to land objects on jump-thru platforms). 'Up' is normal gravity (a floor is below you). Use 'Down', 'Left' or 'Right' for flipped or sideways gravity. Ignored in Top-down style. | combo |
-| Max floor slope | The steepest surface, in degrees from flat, still counted as a floor (or ceiling) rather than a wall in Side-scrolling style. 45 treats anything up to a 45 degree ramp as walkable ground; a surface steeper than this is a wall. Also sets how far from level a jump-thru can tilt and still catch a landing. | float |
-| Axis resolution | How overlaps are cleared. 'Minimum' pushes out along the single shortest direction (best for top-down). 'Separate (gravity axis first)' clears the gravity axis (floors and ceilings) before the cross axis (walls), which gives platformers the stable land-then-touch-wall behaviour and clean corners. | combo |
 | Jump-thru | Adds one-way platforms you can stand on from above but pass through from below or the side. 'None' disables them. 'Jump-thru behavior' uses every object carrying Construct's built-in Jump-thru behavior, with no setup. 'Custom' uses the object types you register with the Add jump-thru action. Needs an Up direction to know which way is 'down onto' the platform. | combo |
 | Enabled | Turn the whole behavior on or off. When off, the object is never pushed out of walls. You can change this while the game runs with the Set enabled action. | check |
 
@@ -95,6 +83,7 @@ npm run dev
 | Eject to nearest open space | Search outward for the closest position where this object overlaps no solid, up to the given radius in pixels, and move it there. Triggers On ejected on success or On eject failed otherwise. | Max radius             *(number)* <br> |
 | Resolve now | Run one resolution immediately, regardless of Resolve on tick. Triggers On pushed out if a correction is applied, or On became trapped if the object cannot be freed. |  |
 | Set enabled | Set whether the behavior resolves. | Enabled             *(boolean)* <br> |
+| Set resolve on tick | Set whether the object is corrected automatically every tick after movement. Turn it off to push out only when you call the Resolve now action (for example for detection-only or discrete corrections). | Enabled             *(boolean)* <br> |
 | Add solid | Add an object type as a solid for this object. Instances of that type will push this object out. Adding the same type twice has no effect. | Object             *(object)* <br> |
 | Clear solids | Remove all object types from this object's solid registry. |  |
 | Remove solid | Stop treating an object type as a solid for this object. | Object             *(object)* <br> |
@@ -155,6 +144,11 @@ npm run dev
 
 ---
 ## Changelog
+
+**1.2.0.0**
+- **Changed:** - Real collision shapes: push-out now probes with the engine's testOverlap instead of bounding-box SAT.
+- **Changed:** - Swept friction: damps the actual along-wall advance, not the remaining distance to the target.
+- **Changed:** - High-friction jitter: slide/friction correction now uses the true contact normal, so the pull-back is exactly parallel to the wall.
 
 **1.1.0.0**
 - **Added:** - Swept (continuous) resolution mode,  traces the move and stops at the first wall; built for Drag & Drop and any large per-tick jump.

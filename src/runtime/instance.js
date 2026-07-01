@@ -121,45 +121,39 @@ export default function (parentClass) {
       this._worldTypesCache = null; // cached world object types for the Solid-behavior union
 
       // --- Configuration (read each resolution; change live) ------------
-      // Property declaration order from config.caw.js (Enabled is kept last in
-      // the panel, so it is the final index):
+      // Panel property order from config.caw.js (Enabled kept last):
       // 0 resolutionMode, 1 resolveOnTick, 2 enableSliding, 3 slideFriction,
-      // 4 stepDistance, 5 obstacles, 6 skinWidth, 7 movementStyle, 8 upDirection,
-      // 9 floorSlopeMax, 10 axisResolution, 11 jumpthruSource, 12 enabled
-      // Max push per tick is not a property; it defaults to 0 (no limit) and is
-      // changed at runtime with the Set max push per tick action.
+      // 4 skinWidth, 5 obstacles, 6 movementStyle, 7 jumpthruSource, 8 enabled
       const properties = this._getInitProperties();
       if (properties) {
         this._resolutionMode = MODE_KEYS[properties[0]] || "minimum_push";
         this._resolveOnTick = properties[1] !== false;
         this._slidingEnabled = properties[2] !== false;
         this._slideFriction = this._clamp01(properties[3] || 0);
-        this._stepDistance = Math.max(0, properties[4] || 0);
+        this._skinWidth = Math.max(0, properties[4] != null ? properties[4] : 0.5);
         this._obstacleMode = OBSTACLE_MODES[properties[5]] || "solids";
-        this._maxPushPerTick = 0;
-        this._skinWidth = Math.max(0, properties[6] != null ? properties[6] : 0.5);
-        this._movementStyle = MOVEMENT_STYLES[properties[7]] || "top_down";
-        this._upDir = UP_DIRS[properties[8]] || "up";
-        this._floorSlopeMax = this._clampAngle(properties[9], 45);
-        this._axisResolution = AXIS_RES_MODES[properties[10]] || "minimum";
-        this._jumpthruSource = JUMPTHRU_SOURCES[properties[11]] || "none";
-        this._enabled = properties[12] !== false;
+        this._movementStyle = MOVEMENT_STYLES[properties[6]] || "top_down";
+        this._jumpthruSource = JUMPTHRU_SOURCES[properties[7]] || "none";
+        this._enabled = properties[8] !== false;
       } else {
-        this._enabled = true;
         this._resolutionMode = "minimum_push";
         this._resolveOnTick = true;
         this._slidingEnabled = true;
         this._slideFriction = 0;
-        this._stepDistance = 0;
-        this._obstacleMode = "solids";
-        this._maxPushPerTick = 0;
         this._skinWidth = 0.5;
+        this._obstacleMode = "solids";
         this._movementStyle = "top_down";
-        this._upDir = "up";
-        this._floorSlopeMax = 45;
-        this._axisResolution = "minimum";
         this._jumpthruSource = "none";
+        this._enabled = true;
       }
+
+      // Still configured by action only (not panel properties). Each defaults
+      // sensibly and is changed at runtime through its matching Set... action.
+      this._stepDistance = 0; // Set step distance
+      this._maxPushPerTick = 0; // Set max push per tick (0 = no limit)
+      this._upDir = "up"; // Set up direction
+      this._floorSlopeMax = 45; // Set max floor slope
+      this._axisResolution = "minimum"; // Set axis resolution
 
       // --- Transient resolution outputs (exposed via expressions) -------
       this._lastPushX = 0;
@@ -190,12 +184,9 @@ export default function (parentClass) {
       this._wasOnWall = false;
       this._wasOnCeiling = false;
 
-      // --- State for sliding / corner stabilisation ---------------------
+      // --- State for resuming the sweep from the last resolved position ---
       this._lastResolvedX = 0;
       this._lastResolvedY = 0;
-      this._lastNX = 0; // last raw contact normal (for slide blending)
-      this._lastNY = 0;
-      this._contactAge = 999;
       this._initialized = false;
 
       this._setTicking2(true); // resolve after event-sheet movement
@@ -353,22 +344,60 @@ export default function (parentClass) {
       let q = null;
       if (typeof inst.getBoundingQuad === "function") q = inst.getBoundingQuad();
       else if (typeof inst.getQuad === "function") q = inst.getQuad();
-      if (!q) {
-        // last-resort axis-aligned fallback
-        const bb = inst.getBoundingBox();
+      // Use the engine's rotated quad when it is non-degenerate. Some object
+      // types (notably Tiled Background, as of r490) return a zero quad even
+      // though their transform is valid, so detect that and rebuild the quad
+      // ourselves from the transform - which stays correct under rotation.
+      if (this._quadIsValid(q)) {
         return [
-          [bb.left, bb.top],
-          [bb.right, bb.top],
-          [bb.right, bb.bottom],
-          [bb.left, bb.bottom],
+          [q.p1.x, q.p1.y],
+          [q.p2.x, q.p2.y],
+          [q.p3.x, q.p3.y],
+          [q.p4.x, q.p4.y],
         ];
       }
+      const t = this._quadFromTransform(inst);
+      if (t) return t;
+      // Last resort: axis-aligned box (ignores rotation, but better than nothing).
+      const bb = inst.getBoundingBox();
       return [
-        [q.p1.x, q.p1.y],
-        [q.p2.x, q.p2.y],
-        [q.p3.x, q.p3.y],
-        [q.p4.x, q.p4.y],
+        [bb.left, bb.top],
+        [bb.right, bb.top],
+        [bb.right, bb.bottom],
+        [bb.left, bb.bottom],
       ];
+    }
+
+    // A bounding quad is usable only if it has non-zero area; a zero quad
+    // (all corners coincident) would make SAT report a phantom separation.
+    _quadIsValid(q) {
+      if (!q || !q.p1 || !q.p3) return false;
+      return (
+        Math.abs(q.p1.x - q.p3.x) > 1e-3 || Math.abs(q.p1.y - q.p3.y) > 1e-3
+      );
+    }
+
+    // Rebuild the object's bounding quad from its transform (position, size,
+    // origin and angle). This matches the engine's bounding quad and, unlike
+    // getBoundingBox(), stays correct when the object is rotated. Used when
+    // getBoundingQuad() returns a degenerate quad.
+    _quadFromTransform(inst) {
+      if (!inst || typeof inst.width !== "number" || typeof inst.x !== "number") {
+        return null;
+      }
+      const w = inst.width;
+      const h = inst.height;
+      const ox = (typeof inst.originX === "number" ? inst.originX : 0) * w;
+      const oy = (typeof inst.originY === "number" ? inst.originY : 0) * h;
+      const a = typeof inst.angle === "number" ? inst.angle : 0; // radians
+      const cos = Math.cos(a);
+      const sin = Math.sin(a);
+      const corner = (lx, ly) => {
+        const rx = lx - ox;
+        const ry = ly - oy;
+        return [inst.x + rx * cos - ry * sin, inst.y + rx * sin + ry * cos];
+      };
+      return [corner(0, 0), corner(w, 0), corner(w, h), corner(0, h)];
     }
 
     _worldTypes() {
@@ -588,12 +617,119 @@ export default function (parentClass) {
       return satMTV(this._quadPoints(a), this._quadPoints(b));
     }
 
+    // Find the nearest direction and distance that lifts the object clear of
+    // `other`, using the engine's own testOverlap() - the SAME test used to
+    // detect the overlap - so the push respects each object's real collision
+    // polygon at any rotation, including concave shapes. (SAT on bounding quads,
+    // used only for detection/sorting now, cannot do either.) Probes outward in
+    // a ring - or along a single axis for the fixed-axis modes - and bisects the
+    // bracketing step for a precise exit. Restores position before returning.
+    // Returns { nx, ny, dist } (raw clearing distance; skin width is added by
+    // the caller), or null if no exit was found within range.
+    _probeExit(other, mode) {
+      const inst = this.instance;
+      if (!other || typeof inst.testOverlap !== "function") return null;
+
+      const ox = inst.x;
+      const oy = inst.y;
+      const w = inst.width || 16;
+      const h = inst.height || 16;
+      const stepPx = Math.max(0.5, Math.min(w, h) * 0.1);
+      // Range covers a shallow, per-frame overlap. Deeper embedding (a fast
+      // teleport into a big solid) is the job of Swept or Eject; there the probe
+      // returns null and _computePush falls back to the quad SAT.
+      const maxStep = Math.max(w, h) + stepPx;
+
+      // Distance to clear the overlap along a unit direction, or Infinity if it
+      // does not clear within range. Each direction is searched independently -
+      // no cross-direction early-exit, which previously let a diagonal evaluated
+      // earlier in the ring suppress the true (shorter) perpendicular exit and
+      // biased the normal downward, drifting the object along walls.
+      const clearDist = (nx, ny) => {
+        let prev = 0; // last distance still overlapping (0 = current position)
+        for (let d = stepPx; d <= maxStep; d += stepPx) {
+          inst.x = ox + nx * d;
+          inst.y = oy + ny * d;
+          if (!inst.testOverlap(other)) {
+            let lo = prev; // overlapping
+            let hi = d; // clear
+            for (let it = 0; it < 6; it++) {
+              const mid = (lo + hi) * 0.5;
+              inst.x = ox + nx * mid;
+              inst.y = oy + ny * mid;
+              if (inst.testOverlap(other)) lo = mid;
+              else hi = mid;
+            }
+            return hi;
+          }
+          prev = d;
+        }
+        return Infinity;
+      };
+
+      let angles;
+      if (mode === "axis_x") angles = [0, Math.PI];
+      else if (mode === "axis_y") angles = [Math.PI / 2, -Math.PI / 2];
+      else {
+        angles = [];
+        const SAMPLES = 24;
+        for (let s = 0; s < SAMPLES; s++) angles.push((s / SAMPLES) * 2 * Math.PI);
+      }
+
+      let bestDist = Infinity;
+      let bestAng = 0;
+      for (let k = 0; k < angles.length; k++) {
+        const a = angles[k];
+        const d = clearDist(Math.cos(a), Math.sin(a));
+        if (d < bestDist) {
+          bestDist = d;
+          bestAng = a;
+        }
+      }
+
+      // Refine the winning angle so the normal isn't quantised to the ring step
+      // (which would leave a small tangential component and a slow drift on
+      // angled walls). Narrow the search each pass around the current best.
+      if (Number.isFinite(bestDist) && mode !== "axis_x" && mode !== "axis_y") {
+        let span = (2 * Math.PI) / angles.length;
+        for (let pass = 0; pass < 4; pass++) {
+          const a1 = bestAng - span;
+          const a2 = bestAng + span;
+          const d1 = clearDist(Math.cos(a1), Math.sin(a1));
+          const d2 = clearDist(Math.cos(a2), Math.sin(a2));
+          if (d1 < bestDist) {
+            bestDist = d1;
+            bestAng = a1;
+          }
+          if (d2 < bestDist) {
+            bestDist = d2;
+            bestAng = a2;
+          }
+          span *= 0.5;
+        }
+      }
+
+      inst.x = ox;
+      inst.y = oy;
+      if (!Number.isFinite(bestDist)) return null;
+      return { nx: Math.cos(bestAng), ny: Math.sin(bestAng), dist: bestDist };
+    }
+
     _computePush(entry, mode) {
       // One-way platforms always pop straight out along their floor normal, so a
       // fixed-axis mode can never shove the object sideways through one.
       if (entry.oneWay) {
         return { nx: entry.nx, ny: entry.ny, dist: entry.depth };
       }
+
+      // Push out using the real collision shape (engine probe). Fixed-axis modes
+      // probe only along their axis; everything else takes the nearest exit.
+      const probeMode = mode === "axis_x" || mode === "axis_y" ? mode : "min";
+      const exit = this._probeExit(entry.inst, probeMode);
+      if (exit) return { nx: exit.nx, ny: exit.ny, dist: exit.dist };
+
+      // Probe found no exit (object clear already, or fully enclosed): fall back
+      // to the bounding-quad SAT so behaviour degrades rather than stalls.
       if (mode === "axis_x" || mode === "axis_y") {
         const pa = this._quadPoints(this.instance);
         const pb = this._quadPoints(entry.inst);
@@ -602,7 +738,6 @@ export default function (parentClass) {
         if (!p) return null;
         return { nx: p.nx, ny: p.ny, dist: p.depth };
       }
-      // minimum_push (and any fallback): use the MTV computed by SAT
       return { nx: entry.nx, ny: entry.ny, dist: entry.depth };
     }
 
@@ -713,28 +848,22 @@ export default function (parentClass) {
 
       const inst = this.instance;
       const rlen = Math.hypot(res.nx, res.ny) || 1;
-      const rnx = res.nx / rlen;
-      const rny = res.ny / rlen;
+      const nx = res.nx / rlen;
+      const ny = res.ny / rlen;
 
-      // Blend with the recent contact normal to bridge corner axis-flips
-      let nx = rnx;
-      let ny = rny;
-      if (this._contactAge < 6 && (this._lastNX || this._lastNY)) {
-        const bx = this._lastNX + (rnx - this._lastNX) * 0.5;
-        const by = this._lastNY + (rny - this._lastNY) * 0.5;
-        const bl = Math.hypot(bx, by);
-        if (bl > 1e-4) {
-          nx = bx / bl;
-          ny = by / bl;
-        }
-      }
-
+      // Tangential part of the move, measured against the TRUE contact normal so
+      // the slide/friction correction is exactly parallel to the surface. Using a
+      // blended/approximate normal here leaves a small into-wall component that
+      // the next push-out must undo every tick - which, under high Slide friction
+      // (a large pull-back), shows up as jitter.
       const dot = segX * nx + segY * ny;
       let slideX = segX - dot * nx;
       let slideY = segY - dot * ny;
 
       if (!this._slidingEnabled) {
-        // Stop at first contact: remove the tangential progress from this move.
+        // Sliding off: stop dead at the wall. Remove the whole along-wall part of
+        // the move so the object holds its position instead of gliding - the way
+        // 8-Direction stops when it cannot slide. Read-outs stay idle.
         inst.x -= slideX;
         inst.y -= slideY;
         return;
@@ -764,7 +893,6 @@ export default function (parentClass) {
       const r2 = this._resolveOverlaps(); // clear overlaps the slide caused
       const nx = r1.nx || r2.nx;
       const ny = r1.ny || r2.ny;
-      this._recordContact(nx, ny, r1.overlapCount || r2.overlapCount);
       return {
         pushX: r1.pushX + r2.pushX,
         pushY: r1.pushY + r2.pushY,
@@ -836,8 +964,57 @@ export default function (parentClass) {
         inst.x = originX + ux * d;
         inst.y = originY + uy * d;
         if (this._isOverlappingAny()) {
-          // First contact: push out and slide the remaining intended motion.
-          const contactSeg = this._resolveSegment(targetX - inst.x, targetY - inst.y);
+          let contactSeg;
+          if (this._slidingEnabled) {
+            // First contact: push out. The sweep step already carried the object
+            // along the wall, so the perpendicular push-out preserves that glide.
+            // Pass the movement actually made from the sweep origin (not the far
+            // remaining distance to the target) so Slide friction damps the real
+            // glide - passing the remaining distance made friction yank the object
+            // backwards along the wall.
+            contactSeg = this._resolveSegment(inst.x - originX, inst.y - originY);
+          } else {
+            // Sliding off: hard-stop at the wall (collision skill: sub-step,
+            // resolve, stop rather than slide). Bisect between the last clear
+            // sweep point (safe) and this overlapping sample, then stop at the
+            // last CLEAR point along the path. Crucially it does NOT push out
+            // perpendicular afterwards: on an angled wall a perpendicular push
+            // shifts the object along the face, so it would re-contact lower next
+            // tick and drift down the wall (a downward slide) even with sliding
+            // off. Stopping short of the surface holds position instead. Stateless
+            // - no projection from a previous frame's resolved position.
+            const ex = inst.x;
+            const ey = inst.y;
+            let lo = 0; // last clear fraction (0 = safe)
+            let hi = 1; // overlapping fraction (1 = current sample)
+            for (let it = 0; it < 10; it++) {
+              const mid = (lo + hi) * 0.5;
+              inst.x = safeX + (ex - safeX) * mid;
+              inst.y = safeY + (ey - safeY) * mid;
+              if (this._isOverlappingAny()) hi = mid;
+              else lo = mid;
+            }
+            // Read the contact normal (for the read-outs / surface classification)
+            // by resolving just inside the surface, then place the object at the
+            // clear stop point - so the read-out reflects the wall but the object
+            // is not pushed along it.
+            inst.x = safeX + (ex - safeX) * hi;
+            inst.y = safeY + (ey - safeY) * hi;
+            const r = this._resolveOverlaps();
+            inst.x = safeX + (ex - safeX) * lo;
+            inst.y = safeY + (ey - safeY) * lo;
+            this._clearSlide();
+            contactSeg = {
+              pushX: inst.x - targetX,
+              pushY: inst.y - targetY,
+              nx: r.nx,
+              ny: r.ny,
+              overlapCount: r.overlapCount,
+              moved: true,
+              trapped: false,
+              hadContact: true,
+            };
+          }
           // Entry-side guarantee: if it could not be freed (a coarse step landed
           // it deep, or it wedged), fall back to the last clear point so it can
           // never end up on the far side of the wall.
@@ -951,7 +1128,6 @@ export default function (parentClass) {
         this._stepIndex = 0;
         const r = this._resolveOverlaps();
         this._clearSlide();
-        this._recordContact(r.nx, r.ny, r.overlapCount);
         accumulate({
           pushX: r.pushX,
           pushY: r.pushY,
@@ -972,7 +1148,6 @@ export default function (parentClass) {
       // Publish the aggregate correction and remember the corrected position.
       this._writeOutputs(totalPushX, totalPushY, aggNX, aggNY, maxOverlap, anyTrapped);
       if (!anyContact) {
-        this._contactAge++;
         this._isSliding = false;
       }
       this._lastResolvedX = inst.x;
@@ -995,17 +1170,6 @@ export default function (parentClass) {
       if (!this._onFloor && this._wasOnFloor) this._trigger("OnLeftFloor");
       if (this._onWall && !this._wasOnWall) this._trigger("OnHitWall");
       if (this._onCeiling && !this._wasOnCeiling) this._trigger("OnHitCeiling");
-    }
-
-    // Remember the contact normal so the next segment can blend its slide
-    // direction against it, bridging the axis-flip that causes corner jitter.
-    _recordContact(nx, ny, overlapCount) {
-      if (overlapCount > 0 && (nx || ny)) {
-        const l = Math.hypot(nx, ny) || 1;
-        this._lastNX = nx / l;
-        this._lastNY = ny / l;
-        this._contactAge = 0;
-      }
     }
 
     _setUnitNormal(nx, ny) {
@@ -1141,6 +1305,10 @@ export default function (parentClass) {
 
     _setEnabled(enabled) {
       this._enabled = !!enabled;
+    }
+
+    _setResolveOnTick(enabled) {
+      this._resolveOnTick = !!enabled;
     }
 
     _setResolutionMode(mode) {

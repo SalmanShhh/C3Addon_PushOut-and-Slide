@@ -32,15 +32,15 @@
           },
           "enableSliding": {
             "name": "Enable sliding",
-            "desc": "When ticked, an object pushed against a wall keeps sliding along it instead of stopping dead. For example, walking diagonally into a wall makes the object glide along the wall rather than getting stuck."
+            "desc": "When ticked, an object pushed against a wall keeps the part of its motion that runs along the wall and glides along it - the same wall behaviour as the built-in 8-Direction behavior (moving or dragging diagonally into a wall slides along it instead of getting stuck). When unticked the object stops dead where it meets the wall and does not glide along it."
           },
           "slideFriction": {
             "name": "Slide friction",
-            "desc": "How much the object slows down while sliding along a wall. 0% glides freely (like ice), 100% stops it the moment it touches a wall. Values in between feel grippy or draggy."
+            "desc": "How much the object is slowed as it slides along a wall while Enable sliding is on. 0% glides freely (like ice), higher values feel grippy or draggy, and 100% removes the glide so it effectively stops at the wall. Has no effect when Enable sliding is off, since the object stops dead there either way."
           },
-          "stepDistance": {
-            "name": "Step distance",
-            "desc": "For fast moving objects. Each frame the object's movement is split into small steps of at most this many pixels, so a fast object cannot jump straight through a thin wall. Set it smaller than your thinnest wall. Leave at 0 to turn stepping off."
+          "skinWidth": {
+            "name": "Skin width",
+            "desc": "A tiny gap, in pixels, left between the object and the wall after a push. It stops the two from being counted as touching again next frame, which can otherwise cause a 1 pixel jitter. The default of 0.5 is invisible; raise it slightly if you still see jitter."
           },
           "obstacles": {
             "name": "Obstacles",
@@ -50,38 +50,12 @@
               "solids": "Solids"
             }
           },
-          "skinWidth": {
-            "name": "Skin width",
-            "desc": "A tiny gap, in pixels, left between the object and the wall after a push. It stops the two from being counted as touching again next frame, which can otherwise cause a 1 pixel jitter. The default of 0.5 is invisible; raise it slightly if you still see jitter."
-          },
           "movementStyle": {
             "name": "Movement style",
             "desc": "Declares the kind of game so contacts can be labelled. 'Top-down' treats every surface the same (no floor/wall/ceiling meaning) - ideal for top-down games. 'Side-scrolling' classifies each contact against the Up direction into floor, wall or ceiling, which powers the Is on floor / Is on wall / Is on ceiling conditions, the On landed / On hit wall / On hit ceiling triggers, slope readouts and jump-thru platforms.",
             "items": {
               "top_down": "Top-down",
               "side_scroller": "Side-scrolling"
-            }
-          },
-          "upDirection": {
-            "name": "Up direction",
-            "desc": "Which screen direction points away from gravity, used to tell a floor from a ceiling in Side-scrolling style (and to land objects on jump-thru platforms). 'Up' is normal gravity (a floor is below you). Use 'Down', 'Left' or 'Right' for flipped or sideways gravity. Ignored in Top-down style.",
-            "items": {
-              "up": "Up (-Y)",
-              "down": "Down (+Y)",
-              "left": "Left (-X)",
-              "right": "Right (+X)"
-            }
-          },
-          "floorSlopeMax": {
-            "name": "Max floor slope",
-            "desc": "The steepest surface, in degrees from flat, still counted as a floor (or ceiling) rather than a wall in Side-scrolling style. 45 treats anything up to a 45 degree ramp as walkable ground; a surface steeper than this is a wall. Also sets how far from level a jump-thru can tilt and still catch a landing."
-          },
-          "axisResolution": {
-            "name": "Axis resolution",
-            "desc": "How overlaps are cleared. 'Minimum' pushes out along the single shortest direction (best for top-down). 'Separate (gravity axis first)' clears the gravity axis (floors and ceilings) before the cross axis (walls), which gives platformers the stable land-then-touch-wall behaviour and clean corners.",
-            "items": {
-              "minimum": "Minimum",
-              "separate": "Separate (gravity axis first)"
             }
           },
           "jumpthruSource": {
@@ -314,6 +288,17 @@
               "enabled": {
                 "name": "Enabled",
                 "desc": "Whether the behavior resolves."
+              }
+            }
+          },
+          "SetResolveOnTick": {
+            "list-name": "Set resolve on tick",
+            "display-text": "{my} Set resolve on tick to {0}",
+            "description": "Set whether the object is corrected automatically every tick after movement. Turn it off to push out only when you call the Resolve now action (for example for detection-only or discrete corrections).",
+            "params": {
+              "enabled": {
+                "name": "Enabled",
+                "desc": "Whether to resolve automatically every tick."
               }
             }
           },

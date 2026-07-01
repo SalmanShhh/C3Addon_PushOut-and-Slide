@@ -21,6 +21,7 @@
     "generateAceFiles": "cd build && node generateAceFiles.js",
     "generateLang": "cd build && node generateLangJSON.js",
     "build": "cd build && node build.js",
+    "check": "node pushout-check.js",
     "dev": "cd build && node dev.js",
     "updateProjectData": "cd build && node updateProjectData.js",
     "init": "npm install && node build/init.js",

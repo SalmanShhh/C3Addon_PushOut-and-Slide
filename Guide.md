@@ -100,27 +100,33 @@ With *Resolve on tick* and *Enable sliding* both on (the defaults), the player n
 
 ## 3. Plugin Properties
 
-These appear in the Properties Bar when Push-Out and Slide is selected on its object. All of them can be changed live with the matching *Set* action.
+These appear in the Properties Bar when Push-Out and Slide is selected on its object, and each can also be changed live with its matching *Set* action. They are read fresh on every resolution, so changing one (in the panel or with an action) takes effect immediately.
 
 | Property | Type | Default | Description |
 |---|---|---|---|
 | **Resolution mode** | Dropdown | `Minimum push` | How the correction is computed: `Minimum push`, `Axis X only`, `Axis Y only`, `Nearest open space`, `Swept (continuous)`. `Swept` traces the move and stops at the first wall, so a fast drag cannot tunnel through. See [section 5](#5-resolution-when-and-how-the-push-out-runs). |
 | **Resolve on tick** | Boolean | `true` | When on, the object is checked and corrected every tick after movement. When off, only *Resolve now* resolves. |
 | **Enable sliding** | Boolean | `true` | When on, movement along a contacted surface is preserved so the object glides along walls instead of stopping. |
-| **Slide friction** | Percent | `0%` | Fraction of along surface speed lost per resolution while sliding. 0% is a frictionless glide; 100% is a full stop. |
-| **Step distance** | Float | `0` | Maximum distance moved per step, in pixels. Movement is broken into steps no larger than this, triggering *On step* at each. 0 disables stepping. |
+| **Slide friction** | Percent | `0%` | Fraction of along-surface speed lost per resolution while sliding. 0% is a frictionless glide; 100% is a full stop. |
+| **Skin width** | Float | `0.5` | Gap kept between the object and a solid after a push, in pixels, to prevent floating-point re-overlap on the next tick. |
 | **Obstacles** | Dropdown | `Solids` | Which objects count as walls. `Solids` (the default) uses every object with Construct's built in Solid behavior, with no setup. `Custom` instead uses the types you register with *Add solid* (each object has its own list). The two modes are exclusive, like the Line of Sight behavior's Obstacles property. |
-| **Skin width** | Float | `0.5` | Gap kept between the object and a solid after a push, in pixels, to prevent floating point re-overlap on the next tick. |
 | **Movement style** | Dropdown | `Top-down` | `Top-down` treats every surface the same. `Side-scrolling` classifies each contact against the Up direction into floor, wall or ceiling, enabling the *Is on floor* / *Is on wall* / *Is on ceiling* conditions, the *On landed* / *On hit wall* / *On hit ceiling* triggers, the slope read-outs and jump-thru platforms. See [section 10](#10-movement-style-top-down-vs-side-scrolling). |
-| **Up direction** | Dropdown | `Up (-Y)` | Which screen direction points away from gravity in Side-scrolling style. `Up` is normal gravity; use `Down`, `Left` or `Right` for flipped or sideways gravity. Ignored in Top-down style. |
-| **Max floor slope** | Float | `45` | The steepest surface, in degrees from flat, still counted as a floor (or ceiling) rather than a wall, and how far a jump-thru may tilt and still catch a landing. |
-| **Axis resolution** | Dropdown | `Minimum` | `Minimum` pushes along the single shortest direction (best for top-down). `Separate (gravity axis first)` clears floors and ceilings before walls, the stable land-then-touch-wall behaviour platformers expect. |
 | **Jump-thru** | Dropdown | `None` | One-way platforms. `None` disables them. `Jump-thru behavior` uses every object with Construct's built-in Jump-thru behavior. `Custom` uses the types registered with *Add jump-thru*. See [section 11](#11-one-way-platforms-jump-thru). |
 | **Enabled** | Boolean | `true` | Whether the behavior resolves at all. Kept last in the panel. Toggle live with *Set enabled*. |
 
-> **Max push per tick** is not in the property panel; it defaults to 0 (no limit) and is set from events with the *Set max push per tick* action. See [section 5](#5-resolution-when-and-how-the-push-out-runs).
+### Settings configured by action (not in the panel)
 
-> Every property above is read fresh on every resolution, so changing it with the matching *Set* action takes effect immediately.
+A few less-common settings are kept out of the panel to reduce clutter. Each keeps the default shown until you change it with its action, usually once on *On start of layout*.
+
+| Setting | Default | Action | Section |
+|---|---|---|---|
+| Step distance | `0` (off) | *Set step distance* | [7](#7-stepping-for-fast-movement) |
+| Max push per tick | `0` (no limit) | *Set max push per tick* | [5](#5-resolution-when-and-how-the-push-out-runs) |
+| Up direction | `Up (-Y)` | *Set up direction* | [10](#10-movement-style-top-down-vs-side-scrolling) |
+| Max floor slope | `45` | *Set max floor slope* | [10](#10-movement-style-top-down-vs-side-scrolling) |
+| Axis resolution | `Minimum` | *Set axis resolution* | [10](#10-movement-style-top-down-vs-side-scrolling) |
+
+> The defaults are chosen so the common case needs no setup: drop the behavior on, leave Obstacles at `Solids`, and a moved object is kept out of every Solid object with sliding on.
 
 ---
 
@@ -195,7 +201,7 @@ Event: On gem arc finished
 
 | Mode key | Behavior |
 |---|---|
-| `minimum_push` | Push along whichever direction frees the object with the least movement, with corner stabilisation. The general purpose default; sliding applies along the resolved surface. |
+| `minimum_push` | Push along whichever direction frees the object with the least movement, measured against its real collision shape. The general purpose default; sliding applies along the resolved surface. |
 | `axis_x` | Only ever push horizontally. For movers constrained to vertical lanes. |
 | `axis_y` | Only ever push vertically. For platform style "land on the surface" correction. |
 | `nearest_open` | Search outward for the closest non overlapping position rather than pushing on one axis. Sliding does not apply, and it is the most expensive mode; prefer it as a one shot eject. |
@@ -237,7 +243,7 @@ Notes:
 
 ### Corner stability and Max push per tick
 
-At a concave corner, a naive shortest axis push flips between X and Y on consecutive ticks and the object visibly buzzes. Push-Out and Slide resolves against the deepest penetrating solid first, blends the slide direction with the previous tick's contact normal, and iterates a bounded number of times per tick so multi wall contacts settle cleanly.
+At a concave corner, a naive shortest axis push flips between X and Y on consecutive ticks and the object visibly buzzes. Push-Out and Slide resolves against the deepest penetrating solid first and iterates a bounded number of times per tick, so multi wall contacts settle cleanly. The push-out direction is measured against each object's real collision polygon using the engine's own overlap test, so it is perpendicular to the true surface and stays accurate on rotated and non-rectangular colliders instead of snapping to a bounding box.
 
 **Max push per tick** caps the length of any single correction. It is not a property; it lives only as the *Set max push per tick* action and defaults to 0 (no limit). Leave it at 0 for instant resolution. Set a small value when an object can end up deeply embedded and you want it eased out over a few ticks instead of snapping:
 
@@ -380,11 +386,12 @@ Set **Movement style** to `Side-scrolling` and every contact is now classified, 
 **Up direction** is normally `Up (-Y)` (the floor is below you, normal gravity). Use `Down`, `Left` or `Right` for flipped-gravity or wall-walking games; floor, ceiling and wall are all measured relative to it.
 
 ```
-Properties Bar:
-  Movement style = Side-scrolling
-  Up direction   = Up (-Y)
-  Max floor slope = 45
-  Axis resolution = Separate (gravity axis first)
+Properties Bar: Movement style = Side-scrolling
+
+Event: On start of layout
+  Action: Hero | Push-Out and Slide: Set axis resolution -> Separate (gravity axis first)
+  // Movement style is a panel property; up direction (defaults to Up) and axis
+  // resolution are set by action. Add "Set up direction" only for flipped gravity.
 
 Event: Hero | Push-Out and Slide: On landed
   Action: Hero | Set "CanJump" to true
@@ -442,10 +449,8 @@ Set the **Jump-thru** property (or call *Set jump-thru source*):
 One-way platforms need an **Up direction** to know which way is "down onto" the platform, so they are meant for Side-scrolling style (the Up direction is read either way).
 
 ```
-Properties Bar:
-  Movement style = Side-scrolling
-  Obstacles      = Solids          // ground and walls
-  Jump-thru      = Jump-thru behavior   // one-way ledges
+Properties Bar: Movement style = Side-scrolling, Obstacles = Solids, Jump-thru = Jump-thru behavior
+  // Ground/walls carry Solid; ledges carry Construct's built-in Jump-thru behavior.
 
 Event: Every tick
   Action: Hero | Set Y to Self.Y + VelY*dt
@@ -497,13 +502,14 @@ Event: Keyboard | On Down arrow + Jump pressed
 |---|---|
 | Resolve now | Run one resolution immediately, regardless of *Resolve on tick*. Triggers *On pushed out* if a correction is applied, or *On became trapped* if the object cannot be freed. |
 | Eject to nearest open space | Search outward up to the given radius for the closest position with no solid overlap and move the object there. Triggers *On ejected* or *On eject failed*. |
+| Set resolve on tick | Turn automatic per-tick correction on or off. Off means the object is only corrected when you call *Resolve now*. |
 | Set enabled | Turn the whole behavior on or off. While off it does nothing. |
 
 ### Configuration
 
 | Action | Description |
 |---|---|
-| Set resolution mode | Choose how the push-out is computed (minimum push, axis X, axis Y, or nearest open space). |
+| Set resolution mode | Choose how the push-out is computed (minimum push, axis X, axis Y, nearest open space, or swept). |
 | Set obstacles | Choose which objects count as walls: Custom (the registered types) or Solids (objects with the built-in Solid behavior). |
 | Set sliding enabled | Turn wall sliding on or off. Off makes the object stop at first contact. |
 | Set slide friction | Set how much along surface speed is lost per resolution, from 0 (frictionless) to 1 (full stop). Values are clamped to that range. |
@@ -701,14 +707,14 @@ Event: Keyboard: On Space pressed
 ```
 Event: On start of layout
   Action: Coin | Push-Out and Slide: Add solid -> Rock
-  Action: Coin | Push-Out and Slide: Set resolve on tick -> (leave OFF in properties)
+  Action: Coin | Push-Out and Slide: Set resolve on tick -> false
 
 Event: Coin | Tween "arc" finished
   Action: Coin | Push-Out and Slide: Resolve now
   // One push to the surface the moment the arc ends, so it stays collectable.
 ```
 
-> Turn *Resolve on tick* off in the Properties Bar for this object so the only correction is the explicit *Resolve now*.
+> *Set resolve on tick -> false* (once, on start) makes the only correction the explicit *Resolve now*.
 
 ### 16.8 Camera focus target confinement
 
@@ -1056,9 +1062,8 @@ Event: On start of layout
 **Scenario:** In a builder, a placement ghost should turn red when it overlaps a placed building, but it must follow the cursor exactly and never be nudged.
 
 ```
-Properties Bar: Resolve on tick = false   (detection only, no pushing)
-
 Event: On start of layout
+  Action: Ghost | Push-Out and Slide: Set resolve on tick -> false   // detection only, no pushing
   Action: Ghost | Push-Out and Slide: Set obstacles -> Custom
   Action: Ghost | Push-Out and Slide: Add solid -> Building
 
@@ -1100,11 +1105,11 @@ Event: Every tick (while cutscene is playing)
 **Scenario:** A character moved by your own gravity and velocity needs to know when it lands and when it bonks its head, instead of guessing from velocity.
 
 ```
-Properties Bar (on Hero):
-  Movement style  = Side-scrolling
-  Up direction    = Up (-Y)
-  Axis resolution = Separate (gravity axis first)
-  Obstacles       = Solids
+Properties Bar (on Hero): Movement style = Side-scrolling, Obstacles = Solids
+
+Event: On start of layout
+  Action: Hero | Push-Out and Slide: Set axis resolution -> Separate (gravity axis first)
+  // Up direction defaults to Up (-Y); only change it for flipped gravity.
 
 Event: Every tick
   Action: Hero | Set VelY to Self.VelY + 1500*dt          // gravity
@@ -1139,10 +1144,8 @@ Event: Keyboard | On Space pressed
 **Scenario:** A platformer with ledges you can jump up through and land on from above, plus a press-down-to-drop.
 
 ```
-Properties Bar (on Hero):
-  Movement style = Side-scrolling
-  Obstacles      = Solids                 // ground and walls
-  Jump-thru      = Jump-thru behavior      // ledges carry the built-in Jump-thru behavior
+Properties Bar (on Hero): Movement style = Side-scrolling, Obstacles = Solids, Jump-thru = Jump-thru behavior
+  // Ground/walls carry Solid; ledges carry Construct's built-in Jump-thru behavior.
 
 Event: Every tick
   Action: Hero | Set VelY to Self.VelY + 1500*dt
@@ -1190,10 +1193,10 @@ Event: Player | entered the inversion zone
 Properties Bar (on Unit):
   Resolution mode = Swept (continuous)
   Obstacles       = Solids          // walls carry the Solid behavior
-  Enable sliding  = true
 
-// No events needed. Drag & Drop snaps the unit to the pointer each tick; swept
-// resolution traces that snap and stops at the first wall, sliding along it.
+// No events needed (sliding is on by default). Drag & Drop snaps the unit to the
+// pointer each tick; swept resolution traces that snap and stops at the first wall,
+// sliding along it.
 ```
 
 For maze-thin walls, also set a **Step distance** below the wall thickness to make the trace fine-grained:
@@ -1207,6 +1210,59 @@ Event: On start of layout
 Event: Unit | Push-Out and Slide: On pushed out
   Action: Audio | Play "thud"
   // On pushed out fires the moment the drag is stopped by a wall.
+```
+
+### 16.44 Blink / dash that stops at the first wall
+
+**Scenario:** A top-down character has a blink that jumps a fixed distance in a single tick. It must travel up to the first wall in its path and stop flush against it, never through it. Swept is the right mode because the whole jump happens in one tick, exactly like a fast drag.
+
+```
+Properties Bar (on Hero): Resolution mode = Swept (continuous), Obstacles = Solids
+
+Event: Keyboard | On Shift pressed
+  Action: Hero | Set position to (Self.X + cos(Self.Angle)*256, Self.Y + sin(Self.Angle)*256)
+  // A 256 px blink in one frame. Swept traces the whole jump from the Hero's last
+  // resolved position and stops at the first solid, so the dash lands against the
+  // wall instead of tunnelling through it.
+
+Event: Hero | Push-Out and Slide: On pushed out
+  Action: Hero | Set "DashHitWall" to true
+  // The blink was cut short by a wall this tick - useful for a spark / screen shake.
+```
+
+### 16.45 High-speed puck that bounces (air hockey / pinball)
+
+**Scenario:** A puck flies around a table under its own velocity at high speed. At any speed it must stay inside the walls and bounce off them cleanly, never slipping through. Swept catches the wall on the entry side no matter how fast the puck is moving, and the contact normal drives the bounce.
+
+```
+Properties Bar (on Puck): Resolution mode = Swept (continuous), Obstacles = Solids, Enable sliding = On
+
+Event: Every tick
+  Action: Puck | Set position to (Self.X + Self.VelX*dt, Self.Y + Self.VelY*dt)
+  // Even at a few thousand px/s the swept trace stops the puck at the first wall.
+
+Event: Puck | Push-Out and Slide: On pushed out
+  Local number dot = Self.VelX*Self.PushOutAndSlide.SurfaceNormalX + Self.VelY*Self.PushOutAndSlide.SurfaceNormalY
+  Action: Puck | Set VelX to Self.VelX - 2*dot*Self.PushOutAndSlide.SurfaceNormalX
+  Action: Puck | Set VelY to Self.VelY - 2*dot*Self.PushOutAndSlide.SurfaceNormalY
+  // Reflect the velocity across the real-surface normal - correct on angled and
+  // rotated walls too, since the push-out is measured from the collision shape.
+```
+
+### 16.46 Grappling-hook tip that anchors on the first wall
+
+**Scenario:** A hook tip shoots out fast in a straight line and must anchor exactly where it first meets a wall - not slide along it, not overshoot. Sliding is turned off so the tip stops dead at contact, and swept guarantees it stops on the entry side even at high launch speed.
+
+```
+Properties Bar (on HookTip): Resolution mode = Swept (continuous), Enable sliding = Off, Obstacles = Solids
+
+Event: HookTip | "Flying" is true
+  Action: HookTip | Set position to (Self.X + cos(Self.Angle)*1400*dt, Self.Y + sin(Self.Angle)*1400*dt)
+
+Event: HookTip | Push-Out and Slide: On pushed out
+  Action: HookTip | Set "Flying" to false
+  Action: HookTip | Set "Anchored" to true
+  // Swept stopped the tip flush on the first wall; pin the rope to Self.X, Self.Y.
 ```
 
 ---
@@ -1478,7 +1534,8 @@ Transient values (the last push, slide, normal, step counters, the surface class
 - **For Drag & Drop, use Swept resolution.** A mouse drag teleports the object to the pointer each tick, so a fast flick can tunnel through or pop out the far side of a wall. Set **Resolution mode** to **Swept (continuous)** on the dragged object: it traces the move and stops at the first wall on the entry side. Add a small **Step distance** for very thin walls. See [section 5](#5-resolution-when-and-how-the-push-out-runs).
 - **Choose Step distance smaller than your thinnest solid,** and remember every step costs a resolution. Too small wastes CPU; too large lets fast objects skip.
 - **nearest_open is expensive.** Use it through *Eject to nearest open space* as a one shot, not as the per tick resolution mode, unless you really need outward search every frame.
-- **Turn Resolve on tick off for discrete corrections.** For a teleport, a single drag step or a settling pickup, leave it off and call *Resolve now* exactly when you want the push.
+- **Turn Resolve on tick off for discrete corrections.** For a teleport, a single drag step or a settling pickup, call *Set resolve on tick -> false* once and then *Resolve now* exactly when you want the push.
+- **A few settings are action-only.** Most settings are in the Properties Bar, but Step distance, Max push per tick, Up direction, Max floor slope and Axis resolution are kept out of the panel to reduce clutter; each defaults sensibly and is set with its *Set...* action (see [section 3](#3-plugin-properties)). Most objects never need them.
 - **Sliding needs movement to redistribute.** A stationary object has nothing to slide. A teleport sized jump is treated as placement and skips sliding on purpose.
 - **Per instance registries are a feature.** A block registering its own type as solid is pushed out of other blocks, not itself. Use this to give different objects different collision rules.
 - **Pick the movement style on purpose.** Leave **Movement style** at **Top-down** for top-down games; the floor/wall/ceiling conditions, the landed/hit triggers and the slope read-outs only do anything in **Side-scrolling** style. Switching to Side-scrolling costs nothing if you do not read those ACEs.
